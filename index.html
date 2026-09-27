@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Studio — Free PDF tools that run in your browser</title>
+    <meta
+      name="description"
+      content="Merge, organize, watermark, fill and edit PDFs for free. Everything runs in your browser — your files are never uploaded."
+    />
+    <meta name="theme-color" content="#2a5eab" />
+    <meta property="og:title" content="PDF Studio" />
+    <meta
+      property="og:description"
+      content="Free PDF tools that run entirely in your browser. No uploads, no sign-up."
+    />
+    <meta property="og:type" content="website" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ff7b6b'/%3E%3Cstop offset='.5' stop-color='%23e53e2c'/%3E%3Cstop offset='.51' stop-color='%23cc2a19'/%3E%3Cstop offset='1' stop-color='%23b01e10'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='60' height='60' rx='12' fill='url(%23g)' stroke='%238e1b1b' stroke-width='3'/%3E%3Ctext x='32' y='41' font-family='Arial,Helvetica,sans-serif' font-weight='bold' font-size='22' fill='%23fff' text-anchor='middle'%3EPDF%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="logo" aria-hidden="true">PDF</span> Studio
+          <sup class="badge" title="Version 1.0">v1.0</sup>
+        </div>
+        <div class="tagline">
+          The free &amp; easy way to work with PDFs online!
+        </div>
+      </div>
+    </header>
+
+    <noscript>
+      <div class="noscript">
+        PDF Studio needs JavaScript to work. Please enable it in your browser
+        settings and reload the page.
+      </div>
+    </noscript>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="box">
+          <h3 id="tools-heading">Tools</h3>
+          <nav id="nav" aria-labelledby="tools-heading">
+            <button type="button" data-tool="merge">
+              <span class="ico" aria-hidden="true">⧉</span>Merge PDFs
+            </button>
+            <button type="button" data-tool="organize">
+              <span class="ico" aria-hidden="true">▦</span>Organize pages
+            </button>
+            <button type="button" data-tool="edit">
+              <span class="ico" aria-hidden="true">✎</span>Add text &amp; images
+            </button>
+            <button type="button" data-tool="watermark">
+              <span class="ico" aria-hidden="true">◈</span>Watermark
+            </button>
+            <button type="button" data-tool="form">
+              <span class="ico" aria-hidden="true">☑</span>Fill a form
+            </button>
+            <button type="button" data-tool="images">
+              <span class="ico" aria-hidden="true">▣</span>Images to PDF
+            </button>
+            <button type="button" data-tool="meta">
+              <span class="ico" aria-hidden="true">ⓘ</span>Info &amp; metadata
+            </button>
+          </nav>
+        </div>
+        <div class="tip">
+          <strong>Did you know?</strong>
+          Your files never leave your computer. Everything happens right here in
+          your browser &mdash; no uploads, no sign-up!
+        </div>
+      </aside>
+
+      <main id="main" tabindex="-1">
+        <div class="alert" id="fatal" role="alert" hidden></div>
+
+        <!-- Merge -->
+        <section class="tool card" id="tool-merge" aria-labelledby="h-merge">
+          <h1 id="h-merge">Merge PDFs</h1>
+          <p class="sub">
+            Combine several PDFs into one file, in the order you choose.
+          </p>
+          <label class="drop" id="merge-drop">
+            <input type="file" accept=".pdf,application/pdf" multiple hidden />
+            <strong>Choose PDFs</strong> or drop them here
+          </label>
+          <ul class="filelist" id="merge-list" aria-label="Files to merge"></ul>
+          <div class="actions">
+            <span class="muted" id="merge-summary"
+              >Add two or more PDFs to get started.</span
+            >
+            <button type="button" id="merge-clear" hidden>Clear all</button>
+            <button type="button" class="primary" id="merge-run" disabled>
+              Merge PDFs
+            </button>
+          </div>
+        </section>
+
+        <!-- Organize -->
+        <section
+          class="tool card"
+          id="tool-organize"
+          aria-labelledby="h-organize"
+          hidden
+        >
+          <h1 id="h-organize">Organize pages</h1>
+          <p class="sub">
+            Drag pages to reorder. Rotate, delete, or pull out just the pages
+            you need.
+          </p>
+          <label class="drop" id="org-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="org-work" hidden>
+            <div class="toolbar">
+              <span class="muted" id="org-info"></span>
+              <span class="spacer"></span>
+              <button type="button" id="org-sel-all">Select all</button>
+              <button type="button" id="org-sel-none">Clear selection</button>
+              <button type="button" id="org-rot-sel">Rotate ↻</button>
+              <button type="button" id="org-del-sel">Delete selected</button>
+              <button type="button" id="org-reset">Reset</button>
+            </div>
+            <p class="hint grid-hint">
+              Click a page to select it. Drag to reorder &mdash; or focus a page
+              and press Shift + ← / →.
+            </p>
+            <div class="pagegrid" id="org-grid" aria-label="Pages"></div>
+            <div class="actions">
+              <label class="inline"
+                >Pages
+                <input id="org-range" placeholder="e.g. 1-3, 5, 8-" size="14" />
+              </label>
+              <button type="button" id="org-extract-range">
+                Extract these pages
+              </button>
+              <button type="button" id="org-extract-sel">
+                Extract selected
+              </button>
+              <button type="button" class="primary" id="org-save">
+                Save document
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Edit: add text & images -->
+        <section
+          class="tool card"
+          id="tool-edit"
+          aria-labelledby="h-edit"
+          hidden
+        >
+          <h1 id="h-edit">Add text &amp; images</h1>
+          <p class="sub">
+            Click on the page where you want to place something, then press “Add
+            to page”.
+          </p>
+          <label class="drop" id="edit-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div class="edit-grid" id="edit-work" hidden>
+            <div class="stage-col">
+              <div class="pagenav">
+                <button
+                  type="button"
+                  id="edit-prev"
+                  class="icon"
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <label class="inline" for="edit-page">Page</label>
+                <select id="edit-page"></select>
+                <span class="muted" id="edit-count"></span>
+                <button
+                  type="button"
+                  id="edit-next"
+                  class="icon"
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+              </div>
+              <div
+                class="stage"
+                id="edit-stage"
+                aria-label="Page preview. Click to choose a position."
+              >
+                <div class="marker" id="edit-marker" hidden>
+                  <span class="ghost" id="edit-ghost"></span>
+                  <span class="imgbox" id="edit-imgbox"></span>
+                  <span class="dot"></span>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="tabs" role="group" aria-label="What to add">
+                <button
+                  type="button"
+                  data-mode="text"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  Text
+                </button>
+                <button type="button" data-mode="image" aria-pressed="false">
+                  Image
+                </button>
+              </div>
+              <div id="edit-text-opts" class="form-grid">
+                <label
+                  >Text<textarea id="edit-text" rows="3">Approved</textarea>
+                </label>
+                <label
+                  >Font
+                  <select id="edit-font">
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="HelveticaBold">Helvetica Bold</option>
+                    <option value="TimesRoman">Times</option>
+                    <option value="TimesRomanBold">Times Bold</option>
+                    <option value="Courier">Courier</option>
+                    <option value="CourierBold">Courier Bold</option>
+                  </select>
+                </label>
+                <div class="two">
+                  <label
+                    >Size<input
+                      id="edit-size"
+                      type="number"
+                      min="4"
+                      max="300"
+                      value="24"
+                  /></label>
+                  <label
+                    >Color<input id="edit-color" type="color" value="#1d4ed8"
+                  /></label>
+                </div>
+                <p class="hint">
+                  Standard fonts support Latin characters only.
+                </p>
+              </div>
+              <div id="edit-image-opts" class="form-grid" hidden>
+                <label
+                  >Image (PNG, JPG, WebP…)<input
+                    id="edit-image"
+                    type="file"
+                    accept="image/*"
+                /></label>
+                <label
+                  >Width (points)<input
+                    id="edit-img-width"
+                    type="number"
+                    min="5"
+                    value="150"
+                /></label>
+                <p class="hint">
+                  72 points = 1 inch. The image's top-left corner goes where you
+                  click.
+                </p>
+              </div>
+              <div class="pos" aria-live="polite">
+                Position: <span id="edit-pos">click on the page</span>
+              </div>
+              <button
+                type="button"
+                class="primary block"
+                id="edit-add"
+                disabled
+              >
+                Add to page
+              </button>
+              <div class="two">
+                <button
+                  type="button"
+                  id="edit-undo"
+                  title="Undo (Ctrl+Z)"
+                  disabled
+                >
+                  Undo
+                </button>
+                <button type="button" id="edit-done">Finish &amp; save</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Watermark -->
+        <section
+          class="tool card"
+          id="tool-watermark"
+          aria-labelledby="h-watermark"
+          hidden
+        >
+          <h1 id="h-watermark">Watermark</h1>
+          <p class="sub">Stamp text across the pages of a PDF.</p>
+          <label class="drop" id="wm-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="wm-file" class="filechip" hidden></div>
+          <div class="form-grid cols">
+            <label>Text<input id="wm-text" value="CONFIDENTIAL" /></label>
+            <label
+              >Font
+              <select id="wm-font">
+                <option value="HelveticaBold">Helvetica Bold</option>
+                <option value="Helvetica">Helvetica</option>
+                <option value="TimesRomanBold">Times Bold</option>
+                <option value="CourierBold">Courier Bold</option>
+              </select>
+            </label>
+            <label
+              >Size<input
+                id="wm-size"
+                type="number"
+                min="6"
+                max="400"
+                value="64"
+            /></label>
+            <label
+              >Angle (°)<input
+                id="wm-angle"
+                type="number"
+                min="-180"
+                max="180"
+                value="45"
+            /></label>
+            <label
+              >Color<input id="wm-color" type="color" value="#e5484d"
+            /></label>
+            <label>
+              <span class="labelrow"
+                >Opacity
+                <output class="muted" id="wm-opacity-val">25%</output></span
+              >
+              <input
+                id="wm-opacity"
+                type="range"
+                min="5"
+                max="100"
+                value="25"
+              />
+            </label>
+            <label
+              >Pages<input
+                id="wm-pages"
+                placeholder="All pages (or e.g. 1-3, 5)"
+            /></label>
+          </div>
+          <div class="actions">
+            <span class="muted" id="wm-hint">Choose a PDF above to begin.</span>
+            <button type="button" class="primary" id="wm-run" disabled>
+              Apply watermark
+            </button>
+          </div>
+        </section>
+
+        <!-- Form -->
+        <section
+          class="tool card"
+          id="tool-form"
+          aria-labelledby="h-form"
+          hidden
+        >
+          <h1 id="h-form">Fill a form</h1>
+          <p class="sub">
+            Load a PDF with fillable fields, type in the values, and save.
+          </p>
+          <label class="drop" id="form-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF form</strong> or drop it here
+          </label>
+          <div id="form-work" hidden>
+            <div class="toolbar">
+              <span class="muted" id="form-info"></span>
+              <span class="spacer"></span>
+              <input
+                id="form-filter"
+                placeholder="Filter fields…"
+                aria-label="Filter fields"
+              />
+            </div>
+            <div class="fields" id="form-fields"></div>
+            <div class="actions">
+              <label class="inline check"
+                ><input type="checkbox" id="form-flatten" /> Flatten (make
+                fields non-editable)</label
+              >
+              <button type="button" class="primary" id="form-run">
+                Save filled form
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Images to PDF -->
+        <section
+          class="tool card"
+          id="tool-images"
+          aria-labelledby="h-images"
+          hidden
+        >
+          <h1 id="h-images">Images to PDF</h1>
+          <p class="sub">
+            Turn photos or scans into a PDF, one image per page.
+          </p>
+          <label class="drop" id="img-drop">
+            <input type="file" accept="image/*" multiple hidden />
+            <strong>Choose images</strong> or drop them here
+          </label>
+          <ul class="filelist" id="img-list" aria-label="Images"></ul>
+          <div class="form-grid cols">
+            <label
+              >Page size
+              <select id="img-size">
+                <option value="fit">Same as image</option>
+                <option value="A4">A4</option>
+                <option value="Letter">US Letter</option>
+              </select>
+            </label>
+            <label
+              >Orientation
+              <select id="img-orient">
+                <option value="auto">Automatic</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </label>
+            <label
+              >Margin (points)<input
+                id="img-margin"
+                type="number"
+                min="0"
+                value="0"
+            /></label>
+          </div>
+          <div class="actions">
+            <span class="muted" id="img-summary"
+              >Add one or more images to get started.</span
+            >
+            <button type="button" id="img-clear" hidden>Clear all</button>
+            <button type="button" class="primary" id="img-run" disabled>
+              Create PDF
+            </button>
+          </div>
+        </section>
+
+        <!-- Metadata -->
+        <section
+          class="tool card"
+          id="tool-meta"
+          aria-labelledby="h-meta"
+          hidden
+        >
+          <h1 id="h-meta">Info &amp; metadata</h1>
+          <p class="sub">
+            See what's inside a PDF and edit its document properties.
+          </p>
+          <label class="drop" id="meta-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="meta-work" hidden>
+            <dl class="facts" id="meta-facts"></dl>
+            <div class="form-grid cols">
+              <label>Title<input id="meta-title" /></label>
+              <label>Author<input id="meta-author" /></label>
+              <label>Subject<input id="meta-subject" /></label>
+              <label
+                >Keywords<input
+                  id="meta-keywords"
+                  placeholder="comma, separated"
+              /></label>
+              <label>Creator<input id="meta-creator" /></label>
+              <label>Producer<input id="meta-producer" /></label>
+            </div>
+            <div class="actions">
+              <button type="button" class="primary" id="meta-run">
+                Save properties
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Shared result panel -->
+        <section
+          class="card result"
+          id="result"
+          aria-labelledby="h-result"
+          tabindex="-1"
+          hidden
+        >
+          <div class="result-head">
+            <div>
+              <h2 id="h-result">Your PDF is ready!</h2>
+              <span class="muted" id="result-meta"></span>
+            </div>
+            <div class="result-actions">
+              <input
+                id="result-name"
+                aria-label="File name"
+                spellcheck="false"
+              />
+              <button type="button" id="result-open">Open</button>
+              <button type="button" class="primary" id="result-download">
+                Download
+              </button>
+            </div>
+          </div>
+          <div
+            class="thumbs"
+            id="result-thumbs"
+            aria-label="Page previews"
+          ></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">
+      <p>
+        &copy; 2011 PDF Studio v1.0 &middot; Powered by
+        <a href="https://pdf-lib.js.org" target="_blank" rel="noopener"
+          >pdf-lib</a
+        >
+        &middot; 100% free, no registration required
+      </p>
+      <p class="badges" aria-hidden="true">
+        <span>HTML5</span><span>CSS3</span><span>Web 2.0</span>
+      </p>
+      <p class="bestviewed">
+        Best viewed in Google Chrome, Firefox 4+ or Safari 5 at 1024&times;768
+      </p>
+    </footer>
+
+    <div id="toasts" aria-live="polite"></div>
+
+    <script src="vendor/pdf-lib.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"
+      integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script src="app.js"></script>
+  </body>
+</html>
