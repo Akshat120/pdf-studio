@@ -62,6 +62,9 @@
             <button type="button" data-tool="organize">
               <span class="ico" aria-hidden="true">▦</span>Organize pages
             </button>
+            <button type="button" data-tool="compress">
+              <span class="ico" aria-hidden="true">⇲</span>Compress PDF
+            </button>
             <button type="button" data-tool="edit">
               <span class="ico" aria-hidden="true">✎</span>Add text &amp; images
             </button>
@@ -525,6 +528,65 @@
             <button type="button" id="img-clear" hidden>Clear all</button>
             <button type="button" class="primary" id="img-run" disabled>
               Create PDF
+            </button>
+          </div>
+        </section>
+
+        <!-- Compress -->
+        <section
+          class="tool card"
+          id="tool-compress"
+          aria-labelledby="h-compress"
+          hidden
+        >
+          <h1 id="h-compress">Compress PDF</h1>
+          <p class="sub">
+            Make a PDF smaller to email or upload. The biggest savings come from
+            photos and scans &mdash; text-only PDFs are usually compact already.
+          </p>
+          <label class="drop" id="cmp-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="cmp-file" class="filechip" hidden></div>
+          <fieldset class="levels">
+            <legend>Compression level</legend>
+            <label class="level">
+              <input type="radio" name="cmp-level" value="basic" />
+              <span class="lv-name">Basic</span>
+              <span class="lv-desc"
+                >Lossless &mdash; nothing visible changes. Removes leftovers and
+                compresses anything stored uncompressed.</span
+              >
+            </label>
+            <label class="level">
+              <input
+                type="radio"
+                name="cmp-level"
+                value="recommended"
+                checked
+              />
+              <span class="lv-name">Recommended</span>
+              <span class="lv-desc"
+                >Also re-saves large photos at up to 1600&nbsp;px with good
+                quality. Best for most files.</span
+              >
+            </label>
+            <label class="level">
+              <input type="radio" name="cmp-level" value="strong" />
+              <span class="lv-name">Strong</span>
+              <span class="lv-desc"
+                >Smallest file: photos at up to 1100&nbsp;px and lower quality.
+                Images look softer.</span
+              >
+            </label>
+          </fieldset>
+          <div class="actions">
+            <span class="muted" id="cmp-status" aria-live="polite"
+              >Choose a PDF above to begin.</span
+            >
+            <button type="button" class="primary" id="cmp-run" disabled>
+              Compress PDF
             </button>
           </div>
         </section>

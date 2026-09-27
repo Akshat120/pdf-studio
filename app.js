@@ -506,7 +506,7 @@
   // Set when the user has edits that exist only in memory (see beforeunload).
   let unsaved = false;
 
-  async function showResult(bytes, filename) {
+  async function showResult(bytes, filename, note = '') {
     const doc = await PDFDocument.load(bytes, { updateMetadata: false });
     result.bytes = bytes;
     if (result.url) URL.revokeObjectURL(result.url);
@@ -517,7 +517,7 @@
     $('#result-meta').textContent = `${plural(
       doc.getPageCount(),
       'page',
-    )} · ${formatBytes(bytes.length)}`;
+    )} · ${formatBytes(bytes.length)}${note ? ` · ${note}` : ''}`;
     const section = $('#result');
     section.hidden = false;
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1870,6 +1870,278 @@
         });
       }
       await showResult(await out.save(), 'images.pdf');
+    }),
+  );
+
+  // ---------------------------------------------------------------- compress
+
+  const {
+    PDFRawStream,
+    PDFName,
+    PDFNumber,
+    PDFDict,
+    PDFArray,
+    PDFRef,
+    PDFStream,
+  } = PDFLib;
+  const N = (name) => PDFName.of(name);
+  const numOf = (obj) =>
+    obj instanceof PDFNumber ? obj.asNumber() : undefined;
+
+  // Longest side (px) and JPEG quality for photos at each level. Basic is
+  // lossless and never touches images.
+  const COMPRESS_LEVELS = {
+    basic: null,
+    recommended: { maxSide: 1600, quality: 0.72 },
+    strong: { maxSide: 1100, quality: 0.5 },
+  };
+
+  const cmp = { bytes: null, name: '' };
+
+  setupDrop($('#cmp-drop'), async ([file]) => {
+    const bytes = await readFile(file);
+    const doc = await loadPdf(bytes);
+    Object.assign(cmp, { bytes, name: file.name });
+    const chip = $('#cmp-file');
+    chip.hidden = false;
+    chip.textContent = `${file.name} · ${plural(
+      doc.getPageCount(),
+      'page',
+    )} · ${formatBytes(bytes.length)}`;
+    $('#cmp-status').textContent = 'Pick a level, then compress.';
+    $('#cmp-run').disabled = false;
+  });
+
+  /** Deletes objects that nothing in the document refers to any more, e.g.
+   *  leftovers from earlier edits. Returns how many were removed. */
+  function removeUnusedObjects(context) {
+    const reachable = new Set();
+    const stack = [context.trailerInfo.Root, context.trailerInfo.Info];
+    while (stack.length) {
+      let obj = stack.pop();
+      if (obj instanceof PDFRef) {
+        if (reachable.has(obj)) continue;
+        reachable.add(obj);
+        obj = context.lookup(obj);
+      }
+      if (obj instanceof PDFStream) stack.push(obj.dict);
+      else if (obj instanceof PDFDict)
+        obj.entries().forEach(([, v]) => stack.push(v));
+      else if (obj instanceof PDFArray) stack.push(...obj.asArray());
+    }
+    let removed = 0;
+    for (const [ref] of context.enumerateIndirectObjects()) {
+      if (!reachable.has(ref)) {
+        context.delete(ref);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /** Flate-compresses streams stored without any compression (lossless). */
+  function deflateUncompressedStreams(context) {
+    let count = 0;
+    for (const [ref, obj] of context.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream) || obj.dict.get(N('Filter'))) continue;
+      // XMP metadata is conventionally left uncompressed so tools can read it.
+      if (obj.dict.lookup(N('Type')) === N('Metadata')) continue;
+      if (obj.contents.length < 256) continue;
+      const deflated = context.flateStream(obj.contents).contents;
+      if (deflated.length >= obj.contents.length * 0.95) continue;
+      obj.dict.set(N('Filter'), N('FlateDecode'));
+      context.assign(ref, PDFRawStream.of(obj.dict, deflated));
+      count++;
+    }
+    return count;
+  }
+
+  /** Number of colour components for colour spaces we can safely re-encode
+   *  (grey or RGB), or 0 for anything else (CMYK, indexed, special). */
+  function colourComponents(context, cs) {
+    cs = context.lookup(cs);
+    if (cs === N('DeviceRGB') || cs === N('CalRGB')) return 3;
+    if (cs === N('DeviceGray') || cs === N('CalGray')) return 1;
+    if (cs instanceof PDFArray) {
+      const kind = cs.lookup(0);
+      if (kind === N('CalRGB')) return 3;
+      if (kind === N('CalGray')) return 1;
+      if (kind === N('ICCBased')) {
+        const profile = cs.lookup(1);
+        const n =
+          profile instanceof PDFStream ? numOf(profile.dict.lookup(N('N'))) : 0;
+        return n === 1 || n === 3 ? n : 0;
+      }
+    }
+    return 0;
+  }
+
+  /** Re-encodes one image XObject as a smaller JPEG, or returns null to leave
+   *  it alone (unsupported kind, too small to matter, or no real saving). */
+  async function recompressImage(context, img, { maxSide, quality }) {
+    const d = img.dict;
+    if (img.contents.length < 20000) return null;
+    if (String(d.lookup(N('ImageMask'))) === 'true') return null;
+    if (d.get(N('Decode'))) return null; // inverted/remapped colours
+    if (d.lookup(N('Mask')) instanceof PDFArray) return null; // colour-key mask needs exact colours
+    const w = numOf(d.lookup(N('Width')));
+    const h = numOf(d.lookup(N('Height')));
+    const comps = colourComponents(context, d.get(N('ColorSpace')));
+    if (!w || !h || !comps) return null;
+
+    let filter = d.lookup(N('Filter'));
+    if (filter instanceof PDFArray)
+      filter = filter.size() === 1 ? filter.lookup(0) : null;
+
+    // A soft mask with /Matte must keep the image's exact dimensions.
+    const smask = d.lookup(N('SMask'));
+    const keepSize = smask instanceof PDFStream && !!smask.dict.get(N('Matte'));
+    const k = keepSize ? 1 : Math.min(1, maxSide / Math.max(w, h));
+    const nw = Math.max(1, Math.round(w * k));
+    const nh = Math.max(1, Math.round(h * k));
+
+    let source;
+    if (filter === N('DCTDecode')) {
+      source = await createImageBitmap(
+        new Blob([img.contents], { type: 'image/jpeg' }),
+        {
+          imageOrientation: 'none', // PDFs ignore EXIF orientation, so must we
+          resizeWidth: nw,
+          resizeHeight: nh,
+          resizeQuality: 'high',
+        },
+      ).catch(() => null);
+    } else if (filter === N('FlateDecode')) {
+      if (numOf(d.lookup(N('BitsPerComponent'))) !== 8) return null;
+      const parms = d.lookup(N('DecodeParms'));
+      if (
+        parms instanceof PDFDict &&
+        (numOf(parms.lookup(N('Predictor'))) || 1) > 1
+      )
+        return null;
+      if (w * h > 40e6) return null; // too large to expand safely in memory
+      const raw = PDFLib.decodePDFRawStream(img).decode();
+      if (raw.length < w * h * comps) return null;
+      const rgba = new Uint8ClampedArray(w * h * 4);
+      for (let p = 0, q = 0; p < w * h; p++, q += comps) {
+        rgba[p * 4] = raw[q];
+        rgba[p * 4 + 1] = raw[q + (comps === 3 ? 1 : 0)];
+        rgba[p * 4 + 2] = raw[q + (comps === 3 ? 2 : 0)];
+        rgba[p * 4 + 3] = 255;
+      }
+      source = await createImageBitmap(new ImageData(rgba, w, h), {
+        resizeWidth: nw,
+        resizeHeight: nh,
+        resizeQuality: 'high',
+      });
+    } else {
+      return null; // JBIG2, CCITT, JPX … are already specialised encodings
+    }
+    if (!source) return null;
+
+    const canvas = el('canvas', { width: nw, height: nh });
+    canvas.getContext('2d').drawImage(source, 0, 0);
+    source.close();
+    const blob = await new Promise((r) =>
+      canvas.toBlob(r, 'image/jpeg', quality),
+    );
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.length > img.contents.length * 0.9) return null; // not worth it
+
+    const nd = context.obj({});
+    d.entries().forEach(([key, value]) => nd.set(key, value));
+    nd.set(N('Filter'), N('DCTDecode'));
+    nd.delete(N('DecodeParms'));
+    nd.set(N('Width'), PDFNumber.of(nw));
+    nd.set(N('Height'), PDFNumber.of(nh));
+    nd.set(N('BitsPerComponent'), PDFNumber.of(8));
+    // Browsers encode JPEGs as RGB, so greyscale images become RGB ones.
+    if (comps === 1) nd.set(N('ColorSpace'), N('DeviceRGB'));
+    return PDFRawStream.of(nd, bytes);
+  }
+
+  async function recompressImages(context, settings, progress) {
+    const images = [];
+    const masks = new Set(); // soft/stencil masks must keep their exact pixels
+    for (const [ref, obj] of context.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream)) continue;
+      if (obj.dict.lookup(N('Subtype')) !== N('Image')) continue;
+      images.push([ref, obj]);
+      for (const key of ['SMask', 'Mask']) {
+        const m = obj.dict.get(N(key));
+        if (m instanceof PDFRef) masks.add(m);
+      }
+    }
+    let shrunk = 0;
+    for (let i = 0; i < images.length; i++) {
+      progress(`Optimising images… ${i + 1} of ${images.length}`);
+      const [ref, img] = images[i];
+      if (masks.has(ref)) continue;
+      try {
+        const smaller = await recompressImage(context, img, settings);
+        if (smaller) {
+          context.assign(ref, smaller);
+          shrunk++;
+        }
+      } catch (e) {
+        console.warn('Skipped an image that could not be re-encoded', e);
+      }
+      await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
+    }
+    return { total: images.length - masks.size, shrunk };
+  }
+
+  $('#cmp-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const level = $('input[name="cmp-level"]:checked').value;
+      const status = $('#cmp-status');
+      const progress = (text) => (status.textContent = text);
+      progress('Reading the PDF…');
+      const doc = await loadPdf(cmp.bytes);
+      const { context } = doc;
+      const removed = removeUnusedObjects(context);
+      progress('Compressing uncompressed data…');
+      const deflated = deflateUncompressedStreams(context);
+      let images = null;
+      if (COMPRESS_LEVELS[level]) {
+        images = await recompressImages(
+          context,
+          COMPRESS_LEVELS[level],
+          progress,
+        );
+      }
+      progress('Saving…');
+      const out = await doc.save({
+        useObjectStreams: true,
+        addDefaultPage: false,
+        updateFieldAppearances: false, // don't restyle existing form fields
+      });
+
+      const before = cmp.bytes.length;
+      const details = [
+        removed && plural(removed, 'unused object') + ' removed',
+        deflated && plural(deflated, 'stream') + ' compressed',
+        images?.total &&
+          `${images.shrunk} of ${plural(images.total, 'image')} re-saved`,
+      ].filter(Boolean);
+      if (out.length >= before) {
+        progress(
+          'This PDF is already as compact as this level can make it' +
+            (level === 'strong' ? '.' : ' — try a stronger level.'),
+        );
+        toast('No saving possible at this level; the original is unchanged.');
+        return;
+      }
+      const pct = Math.round((1 - out.length / before) * 100);
+      progress(
+        `${formatBytes(before)} → ${formatBytes(out.length)}` +
+          (details.length ? `. ${details.join(' · ')}` : ''),
+      );
+      await showResult(
+        out,
+        `${baseName(cmp.name)}-compressed.pdf`,
+        `${pct}% smaller (was ${formatBytes(before)})`,
+      );
     }),
   );
 

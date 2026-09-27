@@ -11,6 +11,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | --------------------- | --------------------------------------------------------------------------------------------- |
 | **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order        |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range         |
+| **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels        |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo       |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                           |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten      |
@@ -101,7 +102,10 @@ These come from pdf-lib:
   error.
 - Text uses the 14 standard PDF fonts, which only support Latin characters.
 - Merging PDFs whose form fields share names can link those fields together.
-- No text extraction, compression, or conversion to images.
+- Compression can't touch specialised image encodings (JBIG2, CCITT, JPEG 2000),
+  CMYK or indexed-colour images, so some scanned PDFs shrink less than with
+  desktop tools. Text-only PDFs are usually compact already.
+- No text extraction or conversion to images.
 
 ## Browser support
 

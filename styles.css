@@ -852,6 +852,58 @@ label.check input {
   height: 15px;
 }
 
+/* ---------- compress: level picker ---------- */
+.levels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+.levels legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: bold;
+  font-size: 12px;
+  color: #444;
+}
+.level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 12px 38px;
+  background: linear-gradient(to bottom, #fff, #f3f5f8);
+  border: 1px solid #cfd5dc;
+  border-radius: 5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+.level:hover {
+  border-color: #9fb7d6;
+}
+.level input {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  margin: 0;
+}
+.level:has(input:checked) {
+  background: linear-gradient(to bottom, #f5f9ff, #e4eefb);
+  border-color: #52a8ec;
+  box-shadow: 0 0 0 3px rgba(82, 168, 236, 0.35);
+}
+.lv-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: #2a5eab;
+}
+.lv-desc {
+  color: #666;
+  font-size: 12px;
+}
+
 /* ---------- metadata ---------- */
 .facts {
   display: grid;
@@ -1274,6 +1326,9 @@ body.busy * {
     grid-template-columns: 1fr;
   }
   .facts {
+    grid-template-columns: 1fr;
+  }
+  .levels {
     grid-template-columns: 1fr;
   }
   .facts div:nth-child(n) {
