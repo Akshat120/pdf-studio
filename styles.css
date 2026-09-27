@@ -584,6 +584,24 @@ label.check input {
   gap: 3px;
 }
 
+/* First-page thumbnails in the merge list: page-shaped, not cropped. */
+#merge-list .fileitem img,
+#merge-list .thumb-pending {
+  flex: none;
+  width: 52px;
+  height: 68px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+#merge-list .thumb-pending {
+  background: #e9ecef;
+  border-color: #e9ecef;
+  box-shadow: none;
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+
 /* ---------- page grid (organize) ---------- */
 .pagegrid {
   display: grid;

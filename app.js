@@ -267,7 +267,10 @@
           'li',
           { class: 'fileitem' },
           el('span', { class: 'idx', 'aria-hidden': 'true' }, i + 1),
-          item.thumbUrl && el('img', { src: item.thumbUrl, alt: '' }),
+          item.thumbUrl
+            ? el('img', { src: item.thumbUrl, alt: item.thumbAlt || '' })
+            : item.thumbPending &&
+                el('span', { class: 'thumb-pending', 'aria-hidden': 'true' }),
           el('span', { class: 'fname', title: item.name }, item.name),
           el('span', { class: 'muted small' }, describe(item)),
           el(
@@ -446,17 +449,52 @@
   const merge = { files: [] };
 
   setupDrop($('#merge-drop'), async (files) => {
+    const added = [];
     for (const file of files) {
       try {
         const bytes = await readFile(file);
         const doc = await loadPdf(bytes);
-        merge.files.push({ name: file.name, bytes, pages: doc.getPageCount() });
+        const item = {
+          name: file.name,
+          bytes,
+          pages: doc.getPageCount(),
+          thumbPending: !!pdfjs,
+          thumbAlt: `First page of ${file.name}`,
+        };
+        merge.files.push(item);
+        added.push(item);
       } catch (e) {
         toast(`${file.name}: ${e.message}`, 'error');
       }
     }
     drawMerge();
+    // Draw first-page thumbnails in the background so the list shows up right away.
+    for (const item of added) {
+      if (!pdfjs) break;
+      try {
+        item.thumbUrl = await renderFirstPageUrl(item.bytes);
+      } catch (e) {
+        console.error(e);
+      }
+      item.thumbPending = false;
+      if (!merge.files.includes(item)) {
+        if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl); // removed meanwhile
+      } else drawMerge();
+    }
   });
+
+  /** Renders page 1 of a PDF to a small PNG and returns an object URL for it. */
+  async function renderFirstPageUrl(bytes) {
+    const pdf = await openForView(bytes);
+    try {
+      const canvas = el('canvas');
+      await renderPage(pdf, 1, canvas, { fit: 120 });
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      return URL.createObjectURL(blob);
+    } finally {
+      pdf.destroy();
+    }
+  }
 
   function drawMerge() {
     const { files } = merge;
@@ -474,6 +512,7 @@
   }
 
   $('#merge-clear').addEventListener('click', () => {
+    merge.files.forEach((f) => f.thumbUrl && URL.revokeObjectURL(f.thumbUrl));
     merge.files = [];
     drawMerge();
   });
