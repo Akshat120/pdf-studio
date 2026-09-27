@@ -3,7 +3,7 @@
 A free, browser-based toolkit for everyday PDF tasks. Everything runs locally
 in your browser — files are never uploaded anywhere, and there's no sign-up.
 
-**▶ Live app: <https://akshat120.github.io/pdf-studio/>**
+**▶ Live app: <https://pdf.akshatdhiman.in/>**
 
 ## Features
 
@@ -40,7 +40,7 @@ and open http://localhost:8080.
 
 Every push to `main` runs the
 [Deploy to GitHub Pages](.github/workflows/deploy.yml) workflow, which
-publishes the repository to <https://akshat120.github.io/pdf-studio/>. You can
+publishes the repository to <https://pdf.akshatdhiman.in/>. You can
 also start it by hand from the **Actions** tab.
 
 To host it elsewhere, copy the files to any static host (Netlify, S3, an nginx
