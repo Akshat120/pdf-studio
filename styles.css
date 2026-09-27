@@ -521,70 +521,6 @@ label.check input {
   border-radius: 4px;
 }
 
-/* ---------- file list (zebra table rows) ---------- */
-.filelist {
-  list-style: none;
-  margin: 14px 0 0;
-  padding: 0;
-  border: 1px solid #d4d9df;
-  border-radius: 4px;
-  overflow: hidden;
-}
-.filelist:empty {
-  display: none;
-}
-.fileitem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  background: #fff;
-  border-bottom: 1px solid #e6e9ed;
-}
-.fileitem:nth-child(even) {
-  background: #f4f7fa;
-}
-.fileitem:last-child {
-  border-bottom: 0;
-}
-.fileitem:hover {
-  background: #fffbe5;
-}
-.fileitem .idx {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  font-size: 11px;
-  font-weight: bold;
-  color: #fff;
-  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
-  border-radius: 50%;
-  background: linear-gradient(to bottom, #999, #6f6f6f);
-}
-.fileitem img {
-  flex: none;
-  width: 150px;
-  height: 112px;
-  object-fit: contain;
-  background: #fff;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-.fileitem .fname {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: bold;
-}
-.row-actions {
-  display: flex;
-  gap: 3px;
-}
-
 /* ---------- page grid (organize) ---------- */
 .pagegrid {
   display: grid;
@@ -658,13 +594,16 @@ label.check input {
 }
 
 /* ---------- merge: file cards (share the organize grid styles) ---------- */
-#merge-hint {
+#merge-hint,
+#img-hint {
   margin: 14px 0 8px;
 }
-#merge-grid {
+#merge-grid,
+#img-grid {
   margin-top: 14px;
 }
-.merge-hint + #merge-grid {
+.grid-hint + #merge-grid,
+.grid-hint + #img-grid {
   margin-top: 0;
 }
 .file-card .pframe {
@@ -676,6 +615,22 @@ label.check input {
   background: #fff;
   border: 1px solid #ccc;
 }
+/* Checkerboard behind images so transparent areas are visible. */
+.image-card .pframe img,
+.lb-stage img {
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #e6e6e6 25%, transparent 25%),
+    linear-gradient(-45deg, #e6e6e6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e6e6e6 75%),
+    linear-gradient(-45deg, transparent 75%, #e6e6e6 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.lb-stage img {
+  display: block;
+  border: 1px solid #ddd;
+}
+
 /* A little stack of paper behind files with more than one page. */
 .file-card.multi .pframe img {
   box-shadow: 3px 3px 0 #fff, 4px 4px 0 #bbb, 7px 7px 0 #fff, 8px 8px 0 #bbb;
@@ -842,6 +797,27 @@ label.check input {
   min-width: 64px;
   text-align: center;
   font-weight: bold;
+}
+
+/* Preview of the image chosen in "Add text & images" */
+.edit-image-preview {
+  display: grid;
+  place-items: center;
+  height: 150px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #d4d9df;
+  border-radius: 4px;
+  box-shadow: none;
+  cursor: zoom-in;
+}
+.edit-image-preview:hover:not(:disabled) {
+  background: #fff;
+  border-color: #52a8ec;
+}
+.edit-image-preview img {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 /* ---------- form fields ---------- */
@@ -1299,10 +1275,6 @@ body.busy * {
   }
   .facts {
     grid-template-columns: 1fr;
-  }
-  .fileitem img {
-    width: 96px;
-    height: 72px;
   }
   .facts div:nth-child(n) {
     background: #fff;

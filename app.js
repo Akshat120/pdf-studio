@@ -348,43 +348,6 @@
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => e.preventDefault());
 
-  /** A numbered list with move up / move down / remove buttons. */
-  function renderFileList(ul, items, redraw, describe) {
-    ul.innerHTML = '';
-    items.forEach((item, i) => {
-      const move = (to) => {
-        items.splice(to, 0, items.splice(i, 1)[0]);
-        redraw();
-      };
-      ul.append(
-        el(
-          'li',
-          { class: 'fileitem' },
-          el('span', { class: 'idx', 'aria-hidden': 'true' }, i + 1),
-          item.thumbUrl && el('img', { src: item.thumbUrl, alt: '' }),
-          el('span', { class: 'fname', title: item.name }, item.name),
-          el('span', { class: 'muted small' }, describe(item)),
-          el(
-            'span',
-            { class: 'row-actions' },
-            iconBtn('↑', `Move ${item.name} up`, () => move(i - 1), i === 0),
-            iconBtn(
-              '↓',
-              `Move ${item.name} down`,
-              () => move(i + 1),
-              i === items.length - 1,
-            ),
-            iconBtn('✕', `Remove ${item.name}`, () => {
-              const [gone] = items.splice(i, 1);
-              if (gone.thumbUrl) URL.revokeObjectURL(gone.thumbUrl);
-              redraw();
-            }),
-          ),
-        ),
-      );
-    });
-  }
-
   /** Lets a grid card be dragged onto another card to reorder. `state.dragFrom`
    *  holds the index being dragged; `move(from, to)` performs the reorder. */
   function makeReorderable(card, index, state, move) {
@@ -587,7 +550,29 @@
   // A lightbox that shows one page at a time as large as the window allows.
   // `pages` lists which pages to step through, as { index, rot } (0-based page
   // index plus extra rotation); it defaults to every page of the document.
-  const viewer = { pdf: null, pages: [], at: 0, token: 0, returnFocus: null };
+  // It can also show images instead: `viewer.images` then holds
+  // { url, name, width, height } items and `pdf` is null.
+  const viewer = {
+    pdf: null,
+    images: null,
+    pages: [],
+    at: 0,
+    token: 0,
+    returnFocus: null,
+  };
+
+  /** Opens the viewer on a list of images, starting at `start`. */
+  function openImageViewer(images, start = 0) {
+    closeViewer({ restoreFocus: false });
+    viewer.returnFocus = document.activeElement;
+    viewer.images = images;
+    viewer.pages = images;
+    viewer.at = Math.min(start, images.length - 1);
+    $('#viewer').hidden = false;
+    document.body.classList.add('lb-open');
+    $('#viewer-close').focus();
+    drawViewer();
+  }
 
   async function openViewer(bytes, { pages, start = 0, title = '' } = {}) {
     if (!pdfjs) {
@@ -603,6 +588,7 @@
     const pdf = await openForView(bytes);
     if (token !== viewer.token) return pdf.destroy();
     viewer.pdf = pdf;
+    viewer.images = null;
     viewer.pages =
       pages ||
       Array.from({ length: pdf.numPages }, (_, index) => ({ index, rot: 0 }));
@@ -618,7 +604,9 @@
   async function drawViewer() {
     const token = ++viewer.token;
     const { pages, at } = viewer;
-    $('#viewer-count').textContent = `Page ${at + 1} of ${pages.length}`;
+    $('#viewer-count').textContent = `${viewer.images ? 'Image' : 'Page'} ${
+      at + 1
+    } of ${pages.length}`;
     $('#viewer-prev').disabled = at === 0;
     $('#viewer-next').disabled = at >= pages.length - 1;
     $('#viewer-nav').hidden = pages.length < 2;
@@ -627,6 +615,24 @@
       Math.min(innerWidth * 0.94, 1600) - 24,
       innerHeight * 0.94 - 76,
     ];
+    if (viewer.images) {
+      const im = viewer.images[at];
+      // Fit the window, but don't blow small images up past 2x (they'd just blur).
+      const k = Math.min(box[0] / im.width, box[1] / im.height, 2);
+      const title = `${im.name} · ${im.width} × ${im.height}`;
+      $('#viewer-title').textContent = title;
+      $('#viewer-title').title = title;
+      $('#viewer-stage').replaceChildren(
+        el('img', {
+          src: im.url,
+          alt: im.name,
+          style: `width:${Math.round(im.width * k)}px;height:${Math.round(
+            im.height * k,
+          )}px`,
+        }),
+      );
+      return;
+    }
     const canvas = el('canvas', {
       role: 'img',
       'aria-label': `Page ${at + 1}`,
@@ -656,6 +662,7 @@
     viewer.token++;
     viewer.pdf?.destroy();
     viewer.pdf = null;
+    viewer.images = null;
     $('#viewer').hidden = true;
     $('#viewer-stage').replaceChildren();
     document.body.classList.remove('lb-open');
@@ -1343,13 +1350,30 @@
     try {
       const img = await normalizeImage(file);
       const bitmap = await createImageBitmap(new Blob([img.bytes]));
-      edit.image = { ...img, width: bitmap.width, height: bitmap.height };
+      if (edit.image) URL.revokeObjectURL(edit.image.url);
+      edit.image = {
+        ...img,
+        name: file.name,
+        width: bitmap.width,
+        height: bitmap.height,
+        url: imageUrl(img),
+      };
+      bitmap.close();
+      const preview = $('#edit-image-preview');
+      preview.replaceChildren(el('img', { src: edit.image.url, alt: '' }));
+      preview.hidden = false;
       drawMarker();
     } catch (err) {
+      if (edit.image) URL.revokeObjectURL(edit.image.url);
       edit.image = null;
+      $('#edit-image-preview').hidden = true;
       e.target.value = '';
       toast(err.message, 'error');
     }
+  });
+
+  $('#edit-image-preview').addEventListener('click', () => {
+    if (edit.image) openImageViewer([edit.image]);
   });
 
   $('#edit-add').addEventListener(
@@ -1667,7 +1691,7 @@
 
   // ---------------------------------------------------------- images to PDF
 
-  const imgs = { items: [] };
+  const imgs = { items: [], dragFrom: -1, focus: -1 };
   // Portrait page sizes in PDF points (1/72 inch).
   const PAGE_SIZES = {
     A4: [595.28, 841.89],
@@ -1681,7 +1705,15 @@
     for (const file of files) {
       try {
         const img = await normalizeImage(file);
-        imgs.items.push({ ...img, name: file.name, thumbUrl: imageUrl(img) });
+        const bitmap = await createImageBitmap(new Blob([img.bytes]));
+        imgs.items.push({
+          ...img,
+          name: file.name,
+          width: bitmap.width,
+          height: bitmap.height,
+          thumbUrl: imageUrl(img),
+        });
+        bitmap.close();
       } catch (e) {
         toast(e.message, 'error');
       }
@@ -1689,16 +1721,115 @@
     drawImgs();
   });
 
-  function drawImgs() {
-    const n = imgs.items.length;
-    renderFileList($('#img-list'), imgs.items, drawImgs, (i) =>
-      i.from ? `${i.from} → ${i.type.toUpperCase()}` : i.type.toUpperCase(),
+  function moveImage(from, to) {
+    if (to < 0 || to >= imgs.items.length || from === to) return;
+    imgs.items.splice(to, 0, imgs.items.splice(from, 1)[0]);
+    imgs.focus = to;
+    drawImgs();
+  }
+
+  function removeImage(i) {
+    const [gone] = imgs.items.splice(i, 1);
+    URL.revokeObjectURL(gone.thumbUrl);
+    imgs.focus = Math.min(i, imgs.items.length - 1);
+    drawImgs();
+  }
+
+  function viewImages(start) {
+    openImageViewer(
+      imgs.items.map((it) => ({
+        url: it.thumbUrl,
+        name: it.name,
+        width: it.width,
+        height: it.height,
+      })),
+      start,
     );
+  }
+
+  function drawImgs() {
+    const { items } = imgs;
+    const grid = $('#img-grid');
+    // Keep keyboard focus on the same card when the grid is rebuilt.
+    const hadFocus = $$('.pframe', grid).indexOf(document.activeElement);
+    const focusIndex = imgs.focus >= 0 ? imgs.focus : hadFocus;
+    imgs.focus = -1;
+    grid.innerHTML = '';
+    items.forEach((it, i) => {
+      const format = it.from
+        ? `${it.from} → ${it.type.toUpperCase()}`
+        : it.type.toUpperCase();
+      const frame = el(
+        'div',
+        {
+          class: 'pframe',
+          role: 'button',
+          tabindex: '0',
+          'aria-label': `${it.name}, ${it.width} by ${it.height}, position ${
+            i + 1
+          } of ${items.length}`,
+          title: `${it.name} — click to view, drag to change the order`,
+          onclick: () => viewImages(i),
+        },
+        el('img', { src: it.thumbUrl, alt: '' }),
+      );
+      frame.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          viewImages(i);
+        } else if (
+          e.shiftKey &&
+          (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+        ) {
+          e.preventDefault();
+          moveImage(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          removeImage(i);
+        }
+      });
+      const card = el(
+        'div',
+        { class: 'pcard file-card image-card' },
+        frame,
+        el('div', { class: 'fcap', title: it.name }, it.name),
+        el(
+          'div',
+          { class: 'fmeta muted small' },
+          `${it.width} × ${it.height} · ${format}`,
+        ),
+        el(
+          'div',
+          { class: 'pbar' },
+          el('span', { class: 'num' }, i + 1),
+          iconBtn('⤢', `View ${it.name} full size`, () => viewImages(i)),
+          iconBtn(
+            '←',
+            `Move ${it.name} earlier`,
+            () => moveImage(i, i - 1),
+            i === 0,
+          ),
+          iconBtn(
+            '→',
+            `Move ${it.name} later`,
+            () => moveImage(i, i + 1),
+            i === items.length - 1,
+          ),
+          iconBtn('✕', `Remove ${it.name}`, () => removeImage(i)),
+        ),
+      );
+      makeReorderable(card, i, imgs, moveImage);
+      grid.append(card);
+    });
+    const n = items.length;
+    grid.hidden = !n;
+    $('#img-hint').hidden = n < 2;
     $('#img-run').disabled = !n;
     $('#img-clear').hidden = !n;
     $('#img-summary').textContent = n
       ? `${plural(n, 'image')} · ${plural(n, 'page')}`
       : 'Add one or more images to get started.';
+    if (focusIndex >= 0) $$('.pframe', grid)[focusIndex]?.focus();
   }
 
   $('#img-clear').addEventListener('click', () => {

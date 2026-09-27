@@ -308,6 +308,14 @@
                     type="file"
                     accept="image/*,.heic,.heif"
                 /></label>
+                <button
+                  type="button"
+                  class="edit-image-preview"
+                  id="edit-image-preview"
+                  title="View full size"
+                  aria-label="Chosen image — view full size"
+                  hidden
+                ></button>
                 <label
                   >Width (points)<input
                     id="edit-img-width"
@@ -471,7 +479,17 @@
             <input type="file" accept="image/*,.heic,.heif" multiple hidden />
             <strong>Choose images</strong> or drop them here
           </label>
-          <ul class="filelist" id="img-list" aria-label="Images"></ul>
+          <p class="hint grid-hint" id="img-hint" hidden>
+            Drag images to change the order &mdash; or focus one and press Shift
+            + ← / →. Each image becomes one page, left to right, top to bottom.
+            Click an image to view it full size.
+          </p>
+          <div
+            class="pagegrid"
+            id="img-grid"
+            aria-label="Images, in page order"
+            hidden
+          ></div>
           <div class="form-grid cols">
             <label
               >Page size
