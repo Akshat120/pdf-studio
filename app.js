@@ -267,10 +267,7 @@
           'li',
           { class: 'fileitem' },
           el('span', { class: 'idx', 'aria-hidden': 'true' }, i + 1),
-          item.thumbUrl
-            ? el('img', { src: item.thumbUrl, alt: item.thumbAlt || '' })
-            : item.thumbPending &&
-                el('span', { class: 'thumb-pending', 'aria-hidden': 'true' }),
+          item.thumbUrl && el('img', { src: item.thumbUrl, alt: '' }),
           el('span', { class: 'fname', title: item.name }, item.name),
           el('span', { class: 'muted small' }, describe(item)),
           el(
@@ -291,6 +288,37 @@
           ),
         ),
       );
+    });
+  }
+
+  /** Lets a grid card be dragged onto another card to reorder. `state.dragFrom`
+   *  holds the index being dragged; `move(from, to)` performs the reorder. */
+  function makeReorderable(card, index, state, move) {
+    card.draggable = true;
+    card.addEventListener('dragstart', (e) => {
+      state.dragFrom = index;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index)); // Firefox needs data to start a drag
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => {
+      state.dragFrom = -1;
+      card.classList.remove('dragging');
+    });
+    card.addEventListener('dragover', (e) => {
+      if (state.dragFrom < 0) return; // not one of our cards (e.g. a file from the desktop)
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.add('dragover');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('dragover'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.remove('dragover');
+      const from = state.dragFrom;
+      state.dragFrom = -1;
+      if (from >= 0 && from !== index) move(from, index);
     });
   }
 
@@ -446,7 +474,7 @@
 
   // ------------------------------------------------------------------- merge
 
-  const merge = { files: [] };
+  const merge = { files: [], dragFrom: -1, focus: -1 };
 
   setupDrop($('#merge-drop'), async (files) => {
     const added = [];
@@ -459,7 +487,6 @@
           bytes,
           pages: doc.getPageCount(),
           thumbPending: !!pdfjs,
-          thumbAlt: `First page of ${file.name}`,
         };
         merge.files.push(item);
         added.push(item);
@@ -468,7 +495,7 @@
       }
     }
     drawMerge();
-    // Draw first-page thumbnails in the background so the list shows up right away.
+    // Draw first-page thumbnails in the background so the files show up right away.
     for (const item of added) {
       if (!pdfjs) break;
       try {
@@ -488,7 +515,7 @@
     const pdf = await openForView(bytes);
     try {
       const canvas = el('canvas');
-      await renderPage(pdf, 1, canvas, { fit: 120 });
+      await renderPage(pdf, 1, canvas, { fit: 150 });
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       return URL.createObjectURL(blob);
     } finally {
@@ -496,11 +523,88 @@
     }
   }
 
+  function moveFile(from, to) {
+    if (to < 0 || to >= merge.files.length || from === to) return;
+    merge.files.splice(to, 0, merge.files.splice(from, 1)[0]);
+    merge.focus = to;
+    drawMerge();
+  }
+
+  function removeFile(i) {
+    const [gone] = merge.files.splice(i, 1);
+    if (gone.thumbUrl) URL.revokeObjectURL(gone.thumbUrl);
+    merge.focus = Math.min(i, merge.files.length - 1);
+    drawMerge();
+  }
+
   function drawMerge() {
     const { files } = merge;
-    renderFileList($('#merge-list'), files, drawMerge, (f) =>
-      plural(f.pages, 'page'),
-    );
+    const grid = $('#merge-grid');
+    // Keep keyboard focus on the same card when the grid is rebuilt
+    // (e.g. when a thumbnail finishes rendering).
+    const hadFocus = $$('.pframe', grid).indexOf(document.activeElement);
+    const focusIndex = merge.focus >= 0 ? merge.focus : hadFocus;
+    merge.focus = -1;
+    grid.innerHTML = '';
+    files.forEach((f, i) => {
+      const thumb = f.thumbUrl
+        ? el('img', { src: f.thumbUrl, alt: '' })
+        : el(
+            'span',
+            { class: f.thumbPending ? 'thumb-pending' : 'thumb-none' },
+            f.thumbPending ? '' : 'PDF',
+          );
+      const frame = el(
+        'div',
+        {
+          class: 'pframe',
+          tabindex: '0',
+          'aria-label': `${f.name}, ${plural(f.pages, 'page')}, position ${
+            i + 1
+          } of ${files.length}`,
+          title: `${f.name} — drag to change the order`,
+        },
+        thumb,
+      );
+      frame.addEventListener('keydown', (e) => {
+        if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+          e.preventDefault();
+          moveFile(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          removeFile(i);
+        }
+      });
+      const card = el(
+        'div',
+        { class: `pcard file-card${f.pages > 1 ? ' multi' : ''}` },
+        frame,
+        el('div', { class: 'fcap', title: f.name }, f.name),
+        el('div', { class: 'fmeta muted small' }, plural(f.pages, 'page')),
+        el(
+          'div',
+          { class: 'pbar' },
+          el('span', { class: 'num' }, i + 1),
+          iconBtn(
+            '←',
+            `Move ${f.name} earlier`,
+            () => moveFile(i, i - 1),
+            i === 0,
+          ),
+          iconBtn(
+            '→',
+            `Move ${f.name} later`,
+            () => moveFile(i, i + 1),
+            i === files.length - 1,
+          ),
+          iconBtn('✕', `Remove ${f.name}`, () => removeFile(i)),
+        ),
+      );
+      makeReorderable(card, i, merge, moveFile);
+      grid.append(card);
+    });
+    grid.hidden = !files.length;
+    $('#merge-hint').hidden = files.length < 2;
     const total = files.reduce((sum, f) => sum + f.pages, 0);
     $('#merge-summary').textContent = !files.length
       ? 'Add two or more PDFs to get started.'
@@ -509,6 +613,7 @@
       : `${plural(files.length, 'file')} · ${plural(total, 'page')} total`;
     $('#merge-run').disabled = files.length < 2;
     $('#merge-clear').hidden = !files.length;
+    if (focusIndex >= 0) $$('.pframe', grid)[focusIndex]?.focus();
   }
 
   $('#merge-clear').addEventListener('click', () => {
@@ -624,7 +729,7 @@
       });
       const card = el(
         'div',
-        { class: `pcard${p.sel ? ' selected' : ''}`, draggable: 'true' },
+        { class: `pcard${p.sel ? ' selected' : ''}` },
         frame,
         el(
           'div',
@@ -654,34 +759,7 @@
           ),
         ),
       );
-      card.addEventListener('dragstart', (e) => {
-        org.dragFrom = i;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(i)); // Firefox needs data to start a drag
-        card.classList.add('dragging');
-      });
-      card.addEventListener('dragend', () => {
-        org.dragFrom = -1;
-        card.classList.remove('dragging');
-      });
-      card.addEventListener('dragover', (e) => {
-        if (org.dragFrom < 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        card.classList.add('dragover');
-      });
-      card.addEventListener('dragleave', () =>
-        card.classList.remove('dragover'),
-      );
-      card.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const from = org.dragFrom;
-        org.dragFrom = -1;
-        if (from < 0) return;
-        if (from === i) drawOrg();
-        else movePage(from, i);
-      });
+      makeReorderable(card, i, org, movePage);
       grid.append(card);
     });
     if (!org.pages.length) {

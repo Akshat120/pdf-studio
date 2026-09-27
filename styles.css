@@ -584,24 +584,6 @@ label.check input {
   gap: 3px;
 }
 
-/* First-page thumbnails in the merge list: page-shaped, not cropped. */
-#merge-list .fileitem img,
-#merge-list .thumb-pending {
-  flex: none;
-  width: 52px;
-  height: 68px;
-  object-fit: contain;
-  background: #fff;
-  border: 1px solid #ccc;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
-}
-#merge-list .thumb-pending {
-  background: #e9ecef;
-  border-color: #e9ecef;
-  box-shadow: none;
-  animation: pulse 1.2s ease-in-out infinite alternate;
-}
-
 /* ---------- page grid (organize) ---------- */
 .pagegrid {
   display: grid;
@@ -671,6 +653,60 @@ label.check input {
 .pbar button {
   padding: 0 6px;
   font-size: 12px;
+}
+
+/* ---------- merge: file cards (share the organize grid styles) ---------- */
+#merge-hint {
+  margin: 14px 0 8px;
+}
+#merge-grid {
+  margin-top: 14px;
+}
+.merge-hint + #merge-grid {
+  margin-top: 0;
+}
+.file-card .pframe {
+  cursor: move;
+}
+.file-card .pframe img {
+  max-width: calc(100% - 10px);
+  max-height: calc(100% - 10px);
+  background: #fff;
+  border: 1px solid #ccc;
+}
+/* A little stack of paper behind files with more than one page. */
+.file-card.multi .pframe img {
+  box-shadow: 3px 3px 0 #fff, 4px 4px 0 #bbb, 7px 7px 0 #fff, 8px 8px 0 #bbb;
+}
+.file-card .thumb-pending,
+.file-card .thumb-none {
+  display: grid;
+  place-items: center;
+  width: 110px;
+  height: 142px;
+  background: #e9ecef;
+}
+.file-card .thumb-pending {
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+.file-card .thumb-none {
+  color: #999;
+  font-weight: bold;
+  border: 1px solid #ccc;
+}
+.file-card .fcap {
+  margin-top: 6px;
+  overflow: hidden;
+  font-weight: bold;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-card .pbar .num {
+  margin-right: auto;
+}
+.file-card .fmeta {
+  margin-top: 1px;
 }
 
 /* ---------- edit tool ---------- */
@@ -1123,6 +1159,14 @@ body.busy * {
   .tip,
   .github-ribbon {
     display: none;
+  }
+  .pagegrid {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+  .pframe {
+    height: 140px;
   }
   #nav {
     flex-direction: row;

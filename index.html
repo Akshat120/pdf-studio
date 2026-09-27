@@ -99,7 +99,16 @@
             <input type="file" accept=".pdf,application/pdf" multiple hidden />
             <strong>Choose PDFs</strong> or drop them here
           </label>
-          <ul class="filelist" id="merge-list" aria-label="Files to merge"></ul>
+          <p class="hint grid-hint merge-hint" id="merge-hint" hidden>
+            Drag files to change the order &mdash; or focus one and press Shift
+            + ← / →. Files are merged left to right, top to bottom.
+          </p>
+          <div
+            class="pagegrid"
+            id="merge-grid"
+            aria-label="Files to merge, in order"
+            hidden
+          ></div>
           <div class="actions">
             <span class="muted" id="merge-summary"
               >Add two or more PDFs to get started.</span

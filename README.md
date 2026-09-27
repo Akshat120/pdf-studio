@@ -9,7 +9,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 | Tool                  | What it does                                                                                  |
 | --------------------- | --------------------------------------------------------------------------------------------- |
-| **Merge PDFs**        | Combine several PDFs into one, in any order — each file shows its first page                  |
+| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order        |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range         |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with undo                |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                           |
