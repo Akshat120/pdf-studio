@@ -2062,7 +2062,9 @@
     if (!source) return null;
 
     const canvas = el('canvas', { width: nw, height: nh });
-    canvas.getContext('2d').drawImage(source, 0, 0);
+    // Pass the target size too: if a browser ignores createImageBitmap's resize
+    // options, the image is still scaled (not cropped).
+    canvas.getContext('2d').drawImage(source, 0, 0, nw, nh);
     source.close();
     const blob = await new Promise((r) =>
       canvas.toBlob(r, 'image/jpeg', quality),
@@ -2548,7 +2550,7 @@
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, w, h);
     }
-    ctx.drawImage(bitmap, 0, 0);
+    ctx.drawImage(bitmap, 0, 0, w, h); // explicit size: see recompressImage()
     if (bitmap !== full) bitmap.close();
     full.close();
     const blob = await new Promise((r) =>
