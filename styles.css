@@ -1044,6 +1044,53 @@ body.busy * {
   white-space: nowrap;
 }
 
+/* ---------- "Fork me on GitHub" ribbon ---------- */
+.github-ribbon {
+  position: fixed;
+  top: 38px;
+  right: -48px;
+  z-index: 40;
+  width: 210px;
+  padding: 5px 0;
+  color: #fff;
+  font: bold 12px/1.4 'Helvetica Neue', Arial, sans-serif;
+  text-align: center;
+  text-decoration: none;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(to bottom, #d0301f, #a8190c);
+  border-top: 1px dashed rgba(255, 255, 255, 0.55);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.55);
+  outline: 1px solid #a8190c;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: rotate(45deg);
+}
+.github-ribbon:hover {
+  color: #fff;
+  text-decoration: none;
+  background: linear-gradient(to bottom, #e0402f, #b8291c);
+}
+.github-ribbon:focus-visible {
+  outline: 2px solid rgba(82, 168, 236, 0.9);
+}
+
+/* Keep the tagline clear of the ribbon when the window is too narrow for the
+   centered 960px header to stay out of the corner. */
+@media (max-width: 1180px) {
+  .topbar-inner {
+    padding-right: 100px;
+  }
+}
+
+.footer .source a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: bold;
+}
+.footer .source svg {
+  flex: none;
+}
+
 /* ---------- small screens (the iPhone 4 era) ---------- */
 @media (max-width: 800px) {
   .layout {
@@ -1055,7 +1102,8 @@ body.busy * {
     min-width: 0;
   }
   .tagline,
-  .tip {
+  .tip,
+  .github-ribbon {
     display: none;
   }
   #nav {
