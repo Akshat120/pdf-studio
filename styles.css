@@ -1516,6 +1516,16 @@ body.busy * {
     visibility: hidden;
     transition: transform 0.25s ease-out, visibility 0s linear 0.25s;
   }
+  /* Let the drawer's contents keep their height so it scrolls, instead of
+     squashing the tool list (and clipping the last tools) to fit. */
+  .sidebar > * {
+    flex-shrink: 0;
+  }
+  .sidebar {
+    overscroll-behavior: contain; /* scrolling the menu doesn't move the page */
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
   .sidebar.open {
     transform: none;
     visibility: visible;
