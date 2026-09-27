@@ -444,19 +444,26 @@
 
   /** Renders a page into `canvas`, sized by `width` or by the longer side (`fit`).
    *  Returns the CSS-pixel viewport, used to map clicks to PDF coordinates. */
+  /** Renders a page into `canvas`. Size it by `width`, by the longer side
+   *  (`fit`), or to fit inside a `box` of [width, height]. `rotate` adds extra
+   *  clockwise rotation on top of the page's own. Returns the CSS-pixel
+   *  viewport, used to map clicks to PDF coordinates. */
   async function renderPage(
     pdf,
     pageNumber,
     canvas,
-    { width, fit, maxDpr = Infinity },
+    { width, fit, box, rotate = 0, maxDpr = Infinity },
   ) {
     const page = await pdf.getPage(pageNumber);
-    const base = page.getViewport({ scale: 1 });
+    const rotation = norm360(page.rotate + rotate);
+    const base = page.getViewport({ scale: 1, rotation });
     const scale = width
       ? width / base.width
+      : box
+      ? Math.min(box[0] / base.width, box[1] / base.height)
       : fit / Math.max(base.width, base.height);
     const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
-    const hi = page.getViewport({ scale: scale * dpr });
+    const hi = page.getViewport({ scale: scale * dpr, rotation });
     canvas.width = Math.round(hi.width);
     canvas.height = Math.round(hi.height);
     canvas.style.width = `${Math.round(hi.width / dpr)}px`;
@@ -469,7 +476,7 @@
       intent: 'print',
       annotationMode: pdfjs.AnnotationMode.ENABLE,
     }).promise;
-    return page.getViewport({ scale });
+    return page.getViewport({ scale, rotation });
   }
 
   // Longest side of page thumbnails in the Merge and Organize grids (CSS px).
@@ -477,7 +484,11 @@
   const GRID_THUMB = 230;
   const GRID_THUMB_OPTS = { fit: GRID_THUMB, maxDpr: 1.5 };
 
-  async function renderThumbs(bytes, container, { max = 12, fit = 300 } = {}) {
+  async function renderThumbs(
+    bytes,
+    container,
+    { max = 12, fit = 300, onOpenTitle = () => '' } = {},
+  ) {
     container.innerHTML = '';
     if (!pdfjs) {
       container.append(
@@ -492,9 +503,25 @@
     const pdf = await openForView(bytes);
     const n = Math.min(pdf.numPages, max);
     for (let i = 1; i <= n; i++) {
-      const canvas = el('canvas', { role: 'img', 'aria-label': `Page ${i}` });
+      const canvas = el('canvas');
       container.append(
-        el('figure', {}, canvas, el('figcaption', {}, `Page ${i}`)),
+        el(
+          'figure',
+          {},
+          el(
+            'button',
+            {
+              type: 'button',
+              class: 'thumb-open',
+              title: 'View full size',
+              'aria-label': `View page ${i} full size`,
+              onclick: () =>
+                openViewer(bytes, { start: i - 1, title: onOpenTitle() }),
+            },
+            canvas,
+          ),
+          el('figcaption', {}, `Page ${i}`),
+        ),
       );
       await renderPage(pdf, i, canvas, { fit });
     }
@@ -532,7 +559,9 @@
     section.hidden = false;
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     section.focus({ preventScroll: true });
-    await renderThumbs(bytes, $('#result-thumbs'));
+    await renderThumbs(bytes, $('#result-thumbs'), {
+      onOpenTitle: () => $('#result-name').value,
+    });
   }
 
   $('#result-download').addEventListener('click', () => {
@@ -551,6 +580,118 @@
     if (!unsaved) return;
     e.preventDefault();
     e.returnValue = '';
+  });
+
+  // ------------------------------------------------------ full-size viewer
+
+  // A lightbox that shows one page at a time as large as the window allows.
+  // `pages` lists which pages to step through, as { index, rot } (0-based page
+  // index plus extra rotation); it defaults to every page of the document.
+  const viewer = { pdf: null, pages: [], at: 0, token: 0, returnFocus: null };
+
+  async function openViewer(bytes, { pages, start = 0, title = '' } = {}) {
+    if (!pdfjs) {
+      toast(
+        'The page viewer needs previews, which could not load (offline?)',
+        'error',
+      );
+      return;
+    }
+    closeViewer({ restoreFocus: false });
+    viewer.returnFocus = document.activeElement;
+    const token = ++viewer.token;
+    const pdf = await openForView(bytes);
+    if (token !== viewer.token) return pdf.destroy();
+    viewer.pdf = pdf;
+    viewer.pages =
+      pages ||
+      Array.from({ length: pdf.numPages }, (_, index) => ({ index, rot: 0 }));
+    viewer.at = Math.min(start, viewer.pages.length - 1);
+    $('#viewer-title').textContent = title;
+    $('#viewer-title').title = title;
+    $('#viewer').hidden = false;
+    document.body.classList.add('lb-open');
+    $('#viewer-close').focus();
+    await drawViewer();
+  }
+
+  async function drawViewer() {
+    const token = ++viewer.token;
+    const { pages, at } = viewer;
+    $('#viewer-count').textContent = `Page ${at + 1} of ${pages.length}`;
+    $('#viewer-prev').disabled = at === 0;
+    $('#viewer-next').disabled = at >= pages.length - 1;
+    $('#viewer-nav').hidden = pages.length < 2;
+    // Leave room for the frame's padding and the caption bar.
+    const box = [
+      Math.min(innerWidth * 0.94, 1600) - 24,
+      innerHeight * 0.94 - 76,
+    ];
+    const canvas = el('canvas', {
+      role: 'img',
+      'aria-label': `Page ${at + 1}`,
+    });
+    try {
+      await renderPage(viewer.pdf, pages[at].index + 1, canvas, {
+        box,
+        rotate: pages[at].rot,
+      });
+    } catch (e) {
+      if (token === viewer.token) console.error(e);
+      return;
+    }
+    if (token !== viewer.token) return; // closed or moved on meanwhile
+    $('#viewer-stage').replaceChildren(canvas);
+  }
+
+  function stepViewer(delta) {
+    const to = viewer.at + delta;
+    if (to < 0 || to >= viewer.pages.length) return;
+    viewer.at = to;
+    drawViewer();
+  }
+
+  function closeViewer({ restoreFocus = true } = {}) {
+    if ($('#viewer').hidden) return;
+    viewer.token++;
+    viewer.pdf?.destroy();
+    viewer.pdf = null;
+    $('#viewer').hidden = true;
+    $('#viewer-stage').replaceChildren();
+    document.body.classList.remove('lb-open');
+    if (restoreFocus) viewer.returnFocus?.focus?.();
+  }
+
+  $('#viewer-close').addEventListener('click', () => closeViewer());
+  $('#viewer-prev').addEventListener('click', () => stepViewer(-1));
+  $('#viewer-next').addEventListener('click', () => stepViewer(1));
+  // Clicking the dark backdrop (outside the white frame) closes the viewer.
+  $('#viewer').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeViewer();
+  });
+  document.addEventListener('keydown', (e) => {
+    if ($('#viewer').hidden) return;
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowLeft') stepViewer(-1);
+    else if (e.key === 'ArrowRight') stepViewer(1);
+    else if (e.key === 'Tab') {
+      // Keep keyboard focus inside the dialog.
+      const focusable = $$('#viewer button:not([disabled])');
+      const i = focusable.indexOf(document.activeElement);
+      const next = e.shiftKey ? i - 1 : i + 1;
+      e.preventDefault();
+      focusable[(next + focusable.length) % focusable.length]?.focus();
+      return;
+    } else return;
+    e.preventDefault();
+  });
+  let viewerResizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(viewerResizeTimer);
+    viewerResizeTimer = setTimeout(
+      () => !$('#viewer').hidden && drawViewer(),
+      200,
+    );
   });
 
   // -------------------------------------------------------------- navigation
@@ -662,16 +803,24 @@
         'div',
         {
           class: 'pframe',
+          role: 'button',
           tabindex: '0',
           'aria-label': `${f.name}, ${plural(f.pages, 'page')}, position ${
             i + 1
           } of ${files.length}`,
-          title: `${f.name} — drag to change the order`,
+          title: `${f.name} — click to view, drag to change the order`,
+          onclick: () => openViewer(f.bytes, { title: f.name }),
         },
         thumb,
       );
       frame.addEventListener('keydown', (e) => {
-        if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openViewer(f.bytes, { title: f.name });
+        } else if (
+          e.shiftKey &&
+          (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+        ) {
           e.preventDefault();
           moveFile(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -689,6 +838,9 @@
           'div',
           { class: 'pbar' },
           el('span', { class: 'num' }, i + 1),
+          iconBtn('⤢', `View ${f.name} full size`, () =>
+            openViewer(f.bytes, { title: f.name }),
+          ),
           iconBtn(
             '←',
             `Move ${f.name} earlier`,
@@ -846,6 +998,13 @@
               ? el('span', { class: 'muted small' }, ` (was ${p.src + 1})`)
               : '',
           ),
+          iconBtn('⤢', `View page ${i + 1} full size`, () =>
+            openViewer(org.bytes, {
+              pages: org.pages.map((pg) => ({ index: pg.src, rot: pg.rot })),
+              start: i,
+              title: org.name,
+            }),
+          ),
           iconBtn(
             '↺',
             `Rotate page ${i + 1} left`,
@@ -969,8 +1128,45 @@
     image: null,
     token: 0,
     width: 0,
+    zoom: 1, // 1 = page fills the column width
   };
   const stage = $('#edit-stage');
+  const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+
+  /** Width available for the page inside the scrollable editor area. */
+  function editFitWidth() {
+    const box = $('#edit-scroll');
+    const cs = getComputedStyle(box);
+    return Math.floor(
+      box.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight) -
+        2, // 2 = stage border
+    );
+  }
+
+  function setZoom(zoom) {
+    const scroller = $('#edit-scroll');
+    // Keep roughly the same spot in view while zooming.
+    const ratio = zoom / edit.zoom;
+    const x =
+      (scroller.scrollLeft + scroller.clientWidth / 2) * ratio -
+      scroller.clientWidth / 2;
+    const y =
+      (scroller.scrollTop + scroller.clientHeight / 2) * ratio -
+      scroller.clientHeight / 2;
+    edit.zoom = zoom;
+    renderEdit().then(() => scroller.scrollTo(Math.max(0, x), Math.max(0, y)));
+  }
+  $('#edit-zoom-in').addEventListener('click', () => {
+    const next = ZOOM_LEVELS.find((z) => z > edit.zoom);
+    if (next) setZoom(next);
+  });
+  $('#edit-zoom-out').addEventListener('click', () => {
+    const prev = [...ZOOM_LEVELS].reverse().find((z) => z < edit.zoom);
+    if (prev) setZoom(prev);
+  });
+  $('#edit-zoom-fit').addEventListener('click', () => setZoom(1));
 
   setupDrop($('#edit-drop'), async ([file]) => {
     const bytes = await readFile(file);
@@ -1008,8 +1204,14 @@
       );
       return;
     }
-    const width = Math.min(760, stage.parentElement.clientWidth);
-    if (!width) return; // tool is hidden; the resize handler will render later
+    const fitWidth = editFitWidth();
+    if (fitWidth <= 0) return; // tool is hidden; it re-renders when shown
+    const width = Math.round(fitWidth * edit.zoom);
+    $('#edit-zoom-label').textContent =
+      edit.zoom === 1 ? 'Fit width' : `${Math.round(edit.zoom * 100)}%`;
+    $('#edit-zoom-out').disabled = edit.zoom <= ZOOM_LEVELS[0];
+    $('#edit-zoom-in').disabled =
+      edit.zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
     const pdf = await openForView(edit.bytes);
     const canvas = el('canvas');
     const viewport = await renderPage(pdf, edit.page + 1, canvas, { width });
@@ -1018,7 +1220,7 @@
     $('canvas', stage)?.remove();
     stage.prepend(canvas);
     edit.viewport = viewport;
-    edit.width = width;
+    edit.width = fitWidth;
     drawMarker();
   }
 
@@ -1237,15 +1439,14 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (!edit.bytes || $('#tool-edit').hidden) return;
-      const width = Math.min(760, stage.parentElement.clientWidth);
-      if (width && width !== edit.width) renderEdit();
+      const width = editFitWidth();
+      if (width > 0 && width !== edit.width) renderEdit();
     }, 200);
   });
   // The window may have been resized while another tool was showing.
   document.addEventListener('toolchange', (e) => {
     if (e.detail !== 'edit' || !edit.bytes) return;
-    const width = Math.min(760, stage.parentElement.clientWidth);
-    if (width !== edit.width) renderEdit();
+    if (editFitWidth() !== edit.width) renderEdit();
   });
 
   // --------------------------------------------------------------- watermark
@@ -1467,7 +1668,14 @@
   // ---------------------------------------------------------- images to PDF
 
   const imgs = { items: [] };
-  const PAGE_SIZES = { A4: [595.28, 841.89], Letter: [612, 792] };
+  // Portrait page sizes in PDF points (1/72 inch).
+  const PAGE_SIZES = {
+    A4: [595.28, 841.89],
+    Letter: [612, 792],
+    A3: [841.89, 1190.55],
+    Legal: [612, 1008],
+    Tabloid: [792, 1224],
+  };
 
   setupDrop($('#img-drop'), async (files) => {
     for (const file of files) {

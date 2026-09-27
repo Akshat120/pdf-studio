@@ -209,16 +209,49 @@
                 >
                   ›
                 </button>
+                <span class="spacer"></span>
+                <span class="zoom" role="group" aria-label="Zoom">
+                  <button
+                    type="button"
+                    id="edit-zoom-out"
+                    class="icon"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    −
+                  </button>
+                  <output id="edit-zoom-label" aria-live="polite"
+                    >Fit width</output
+                  >
+                  <button
+                    type="button"
+                    id="edit-zoom-in"
+                    class="icon"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    id="edit-zoom-fit"
+                    title="Fit page to width"
+                  >
+                    Fit
+                  </button>
+                </span>
               </div>
-              <div
-                class="stage"
-                id="edit-stage"
-                aria-label="Page preview. Click to choose a position."
-              >
-                <div class="marker" id="edit-marker" hidden>
-                  <span class="ghost" id="edit-ghost"></span>
-                  <span class="imgbox" id="edit-imgbox"></span>
-                  <span class="dot"></span>
+              <div class="stage-scroll" id="edit-scroll">
+                <div
+                  class="stage"
+                  id="edit-stage"
+                  aria-label="Page preview. Click to choose a position."
+                >
+                  <div class="marker" id="edit-marker" hidden>
+                    <span class="ghost" id="edit-ghost"></span>
+                    <span class="imgbox" id="edit-imgbox"></span>
+                    <span class="dot"></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -443,9 +476,12 @@
             <label
               >Page size
               <select id="img-size">
-                <option value="fit">Same as image</option>
-                <option value="A4">A4</option>
+                <option value="A4" selected>A4</option>
                 <option value="Letter">US Letter</option>
+                <option value="A3">A3 (large)</option>
+                <option value="Legal">US Legal</option>
+                <option value="Tabloid">Tabloid / Ledger (large)</option>
+                <option value="fit">Same as image</option>
               </select>
             </label>
             <label
@@ -576,6 +612,40 @@
         Best viewed in Google Chrome, Firefox 4+ or Safari 5 at 1024&times;768
       </p>
     </footer>
+
+    <div
+      class="lightbox"
+      id="viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="viewer-title"
+      hidden
+    >
+      <div class="lb-frame">
+        <button
+          type="button"
+          class="lb-close"
+          id="viewer-close"
+          aria-label="Close viewer"
+          title="Close (Esc)"
+        >
+          ×
+        </button>
+        <div class="lb-stage" id="viewer-stage"></div>
+        <div class="lb-bar">
+          <span class="lb-title" id="viewer-title"></span>
+          <span class="lb-nav" id="viewer-nav">
+            <button type="button" id="viewer-prev" title="Previous page (←)">
+              ‹ Prev
+            </button>
+            <span id="viewer-count" aria-live="polite"></span>
+            <button type="button" id="viewer-next" title="Next page (→)">
+              Next ›
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
 
     <div id="toasts" aria-live="polite"></div>
 

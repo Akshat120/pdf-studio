@@ -7,17 +7,21 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 ## Features
 
-| Tool                  | What it does                                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------- |
-| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order        |
-| **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range         |
-| **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with undo                |
-| **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                           |
-| **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten      |
-| **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF, with page size, orientation and margins |
-| **Info & metadata**   | Inspect page count, sizes and dates; edit title, author, subject, keywords, creator, producer |
+| Tool                  | What it does                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order              |
+| **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range               |
+| **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo             |
+| **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                 |
+| **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten            |
+| **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF — A4, Letter, A3, Legal, Tabloid or image size |
+| **Info & metadata**   | Inspect page count, sizes and dates; edit title, author, subject, keywords, creator, producer       |
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
+
+Click any page preview — a Merge card, the ⤢ button on an Organize page, or a
+page in the result panel — to open it full size in a viewer (← / → to change
+page, Esc to close).
 
 ## Running locally
 
