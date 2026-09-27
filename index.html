@@ -77,6 +77,9 @@
             <button type="button" data-tool="images">
               <span class="ico" aria-hidden="true">▣</span>Images to PDF
             </button>
+            <button type="button" data-tool="imgcompress">
+              <span class="ico" aria-hidden="true">▧</span>Compress images
+            </button>
             <button type="button" data-tool="meta">
               <span class="ico" aria-hidden="true">ⓘ</span>Info &amp; metadata
             </button>
@@ -591,6 +594,84 @@
           </div>
         </section>
 
+        <!-- Compress images -->
+        <section
+          class="tool card"
+          id="tool-imgcompress"
+          aria-labelledby="h-imgcompress"
+          hidden
+        >
+          <h1 id="h-imgcompress">Compress images</h1>
+          <p class="sub">
+            Shrink photos and pictures from iPhone, Android or the web &mdash;
+            HEIC, HEIF, JPEG, PNG, WebP, AVIF, GIF and BMP.
+          </p>
+          <label class="drop" id="ic-drop">
+            <input
+              type="file"
+              accept="image/*,.heic,.heif,.avif,.bmp,.tif,.tiff"
+              multiple
+              hidden
+            />
+            <strong>Choose images</strong> or drop them here
+          </label>
+          <div class="pagegrid" id="ic-grid" aria-label="Images" hidden></div>
+          <div class="form-grid cols">
+            <label
+              >Save as
+              <select id="ic-format">
+                <option value="keep" selected>
+                  Same format (HEIC → JPEG)
+                </option>
+                <option value="image/jpeg">JPEG — works everywhere</option>
+                <option value="image/webp">WebP — smallest</option>
+                <option value="image/png">PNG — lossless, for graphics</option>
+              </select>
+            </label>
+            <label>
+              <span class="labelrow"
+                >Quality
+                <output class="muted" id="ic-quality-val">75%</output></span
+              >
+              <input
+                id="ic-quality"
+                type="range"
+                min="10"
+                max="100"
+                value="75"
+              />
+            </label>
+            <label
+              >Maximum size
+              <select id="ic-size">
+                <option value="" selected>Keep original size</option>
+                <option value="3840">3840 px (4K)</option>
+                <option value="2560">2560 px</option>
+                <option value="1920">1920 px (Full HD)</option>
+                <option value="1280">1280 px</option>
+                <option value="800">800 px</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint ic-note">
+            Location and camera data (EXIF) are removed. Animated GIFs become
+            still images. Browsers can&rsquo;t save HEIC, so iPhone photos are
+            saved as JPEG unless you pick another format.
+          </p>
+          <div class="actions">
+            <span class="muted" id="ic-summary"
+              >Add images to get started.</span
+            >
+            <button type="button" id="ic-clear" hidden>Clear all</button>
+            <button type="button" id="ic-zip" hidden>
+              Download all (.zip)
+            </button>
+            <button type="button" class="primary" id="ic-run" disabled>
+              Compress images
+            </button>
+          </div>
+        </section>
+
         <!-- Metadata -->
         <section
           class="tool card"
@@ -714,6 +795,15 @@
         <div class="lb-stage" id="viewer-stage"></div>
         <div class="lb-bar">
           <span class="lb-title" id="viewer-title"></span>
+          <button
+            type="button"
+            id="viewer-compare"
+            title="Switch between the original and compressed image (C)"
+            aria-pressed="false"
+            hidden
+          >
+            Show original
+          </button>
           <span class="lb-nav" id="viewer-nav">
             <button type="button" id="viewer-prev" title="Previous page (←)">
               ‹ Prev

@@ -852,6 +852,32 @@ label.check input {
   height: 15px;
 }
 
+/* ---------- compress images ---------- */
+#ic-grid {
+  margin-top: 14px;
+}
+.ic-note {
+  margin: 10px 0 0;
+}
+.image-card.done {
+  border-color: #b8d9a8;
+}
+.saving,
+.growth {
+  display: inline-block;
+  padding: 0 5px;
+  font-weight: bold;
+  font-size: 11px;
+  color: #fff;
+  border-radius: 3px;
+}
+.saving {
+  background: #5a9a17;
+}
+.growth {
+  background: #b94a48;
+}
+
 /* ---------- compress: level picker ---------- */
 .levels {
   display: grid;

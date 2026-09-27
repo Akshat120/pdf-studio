@@ -567,6 +567,7 @@
     viewer.returnFocus = document.activeElement;
     viewer.images = images;
     viewer.pages = images;
+    viewer.compare = false;
     viewer.at = Math.min(start, images.length - 1);
     $('#viewer').hidden = false;
     document.body.classList.add('lb-open');
@@ -589,6 +590,7 @@
     if (token !== viewer.token) return pdf.destroy();
     viewer.pdf = pdf;
     viewer.images = null;
+    $('#viewer-compare').hidden = true;
     viewer.pages =
       pages ||
       Array.from({ length: pdf.numPages }, (_, index) => ({ index, rot: 0 }));
@@ -617,15 +619,29 @@
     ];
     if (viewer.images) {
       const im = viewer.images[at];
+      // Items may carry an `original` ({ url, width, height, size }) to compare
+      // against; both are shown at the same on-screen size.
+      const showOriginal = viewer.compare && !!im.original;
+      const shown = showOriginal ? im.original : im;
+      const compare = $('#viewer-compare');
+      compare.hidden = !im.original;
+      compare.textContent = showOriginal ? 'Show compressed' : 'Show original';
+      compare.setAttribute('aria-pressed', String(showOriginal));
       // Fit the window, but don't blow small images up past 2x (they'd just blur).
       const k = Math.min(box[0] / im.width, box[1] / im.height, 2);
-      const title = `${im.name} · ${im.width} × ${im.height}`;
+      const parts = [im.name];
+      if (im.original) parts.push(showOriginal ? 'Original' : 'Compressed');
+      parts.push(`${shown.width} × ${shown.height}`);
+      if (shown.size) parts.push(formatBytes(shown.size));
+      const title = parts.join(' · ');
       $('#viewer-title').textContent = title;
       $('#viewer-title').title = title;
       $('#viewer-stage').replaceChildren(
         el('img', {
-          src: im.url,
-          alt: im.name,
+          src: shown.url,
+          alt: `${im.name}${
+            im.original ? (showOriginal ? ' (original)' : ' (compressed)') : ''
+          }`,
           style: `width:${Math.round(im.width * k)}px;height:${Math.round(
             im.height * k,
           )}px`,
@@ -670,6 +686,10 @@
   }
 
   $('#viewer-close').addEventListener('click', () => closeViewer());
+  $('#viewer-compare').addEventListener('click', () => {
+    viewer.compare = !viewer.compare;
+    drawViewer();
+  });
   $('#viewer-prev').addEventListener('click', () => stepViewer(-1));
   $('#viewer-next').addEventListener('click', () => stepViewer(1));
   // Clicking the dark backdrop (outside the white frame) closes the viewer.
@@ -681,7 +701,9 @@
     if (e.key === 'Escape') closeViewer();
     else if (e.key === 'ArrowLeft') stepViewer(-1);
     else if (e.key === 'ArrowRight') stepViewer(1);
-    else if (e.key === 'Tab') {
+    else if ((e.key === 'c' || e.key === 'C') && !$('#viewer-compare').hidden) {
+      $('#viewer-compare').click();
+    } else if (e.key === 'Tab') {
       // Keep keyboard focus inside the dialog.
       const focusable = $$('#viewer button:not([disabled])');
       const i = focusable.indexOf(document.activeElement);
@@ -2144,6 +2166,483 @@
       );
     }),
   );
+
+  // ----------------------------------------------------------- compress images
+
+  // Output formats we can offer. Browsers can't write HEIC, so Apple photos are
+  // saved as JPEG (or whatever the user picks). AVIF is read but not written:
+  // few browsers can encode it, and those that claim to may ignore quality.
+  const IMAGE_FORMATS = {
+    'image/jpeg': { ext: 'jpg', label: 'JPEG', lossy: true },
+    'image/webp': { ext: 'webp', label: 'WebP', lossy: true },
+    'image/png': { ext: 'png', label: 'PNG', lossy: false },
+  };
+  // Browsers may decline to encode a format (e.g. AVIF); they then silently
+  // hand back a PNG, so check what actually comes out.
+  const encoderSupport = {};
+  async function canEncode(type) {
+    if (!(type in encoderSupport)) {
+      const c = el('canvas', { width: 2, height: 2 });
+      const blob = await new Promise((r) => c.toBlob(r, type, 0.5));
+      encoderSupport[type] = !!blob && blob.type === type;
+    }
+    return encoderSupport[type];
+  }
+
+  /** Identifies an image from its first bytes (file names and MIME types lie). */
+  function sniffImage(b) {
+    const ascii = (from, to) => String.fromCharCode(...b.subarray(from, to));
+    if (isJpg(b)) return { mime: 'image/jpeg', label: 'JPEG' };
+    if (isPng(b)) return { mime: 'image/png', label: 'PNG' };
+    if (ascii(0, 4) === 'GIF8') return { mime: 'image/gif', label: 'GIF' };
+    if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP')
+      return { mime: 'image/webp', label: 'WebP' };
+    if (ascii(0, 2) === 'BM') return { mime: 'image/bmp', label: 'BMP' };
+    if (ascii(0, 4) === 'II*\0' || ascii(0, 4) === 'MM\0*')
+      return { mime: 'image/tiff', label: 'TIFF' };
+    if (isHeif(b)) {
+      const brand = ascii(8, 12);
+      return brand === 'avif' || brand === 'avis'
+        ? { mime: 'image/avif', label: 'AVIF' }
+        : { mime: 'image/heic', label: 'HEIC' };
+    }
+    return { mime: '', label: 'image' };
+  }
+
+  // iOS Safari refuses canvases above ~16.7 megapixels, so bigger photos (e.g.
+  // 48 MP iPhone shots) are scaled to fit.
+  const MAX_PIXELS = 16_700_000;
+
+  /** Decodes any supported image to an upright ImageBitmap (EXIF orientation
+   *  applied), plus a URL the browser can display for the original. */
+  async function decodeImage(file, bytes, kind) {
+    let source = file;
+    let previewUrl = null;
+    let bitmap = await createImageBitmap(file).catch(() => null);
+    if (!bitmap && isHeif(bytes)) {
+      // HEIC outside Safari: decode via heic-to at near-lossless quality.
+      const heicTo = await loadHeicDecoder();
+      source = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.98 });
+      bitmap = await createImageBitmap(source);
+      previewUrl = URL.createObjectURL(source);
+    }
+    if (!bitmap) {
+      throw new Error(
+        kind.label === 'TIFF'
+          ? `${file.name}: TIFF images can only be opened in Safari`
+          : `${file.name} is not an image this browser can open`,
+      );
+    }
+    return { bitmap, previewUrl: previewUrl || URL.createObjectURL(file) };
+  }
+
+  /** Which format to write an image as for the chosen output setting. */
+  async function outputType(setting, kind) {
+    if (setting !== 'keep') return setting;
+    const keep = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
+    if (keep[kind.mime] && (await canEncode(kind.mime))) return kind.mime;
+    if (kind.mime === 'image/gif') return 'image/png'; // graphics; keep it lossless
+    if (kind.mime === 'image/avif')
+      return (await canEncode('image/webp')) ? 'image/webp' : 'image/jpeg'; // closest efficient format
+    return 'image/jpeg'; // HEIC/HEIF, BMP, TIFF photos
+  }
+
+  // ---- a tiny ZIP writer (stored entries; images are already compressed) ----
+  const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc32 = (bytes) => {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++)
+      c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+
+  /** Builds a .zip Blob from [{ name, bytes }] (names made unique). */
+  function makeZip(files) {
+    const now = new Date();
+    const dosTime =
+      (now.getHours() << 11) |
+      (now.getMinutes() << 5) |
+      (now.getSeconds() >> 1);
+    const dosDate =
+      ((now.getFullYear() - 1980) << 9) |
+      ((now.getMonth() + 1) << 5) |
+      now.getDate();
+    const enc = new TextEncoder();
+    const used = new Set();
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const f of files) {
+      let name = f.name;
+      for (let n = 2; used.has(name.toLowerCase()); n++)
+        name = f.name.replace(/(\.[^.]*)?$/, ` (${n})$1`);
+      used.add(name.toLowerCase());
+      const nameBytes = enc.encode(name);
+      const crc = crc32(f.bytes);
+      const header = new DataView(new ArrayBuffer(30));
+      header.setUint32(0, 0x04034b50, true);
+      header.setUint16(4, 20, true); // version needed
+      header.setUint16(6, 0x0800, true); // UTF-8 file names
+      header.setUint16(8, 0, true); // stored
+      header.setUint16(10, dosTime, true);
+      header.setUint16(12, dosDate, true);
+      header.setUint32(14, crc, true);
+      header.setUint32(18, f.bytes.length, true);
+      header.setUint32(22, f.bytes.length, true);
+      header.setUint16(26, nameBytes.length, true);
+      parts.push(header, nameBytes, f.bytes);
+      const entry = new DataView(new ArrayBuffer(46));
+      entry.setUint32(0, 0x02014b50, true);
+      entry.setUint16(4, 20, true);
+      entry.setUint16(6, 20, true);
+      entry.setUint16(8, 0x0800, true);
+      entry.setUint16(10, 0, true);
+      entry.setUint16(12, dosTime, true);
+      entry.setUint16(14, dosDate, true);
+      entry.setUint32(16, crc, true);
+      entry.setUint32(20, f.bytes.length, true);
+      entry.setUint32(24, f.bytes.length, true);
+      entry.setUint16(28, nameBytes.length, true);
+      entry.setUint32(42, offset, true);
+      central.push(entry, nameBytes);
+      offset += 30 + nameBytes.length + f.bytes.length;
+    }
+    const centralSize = central.reduce((n, p) => n + p.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true);
+    end.setUint32(12, centralSize, true);
+    end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end], { type: 'application/zip' });
+  }
+
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // ---- the tool ----
+  const ic = { items: [], dragFrom: -1, focus: -1 };
+
+  setupDrop($('#ic-drop'), async (files) => {
+    for (const file of files) {
+      try {
+        const bytes = await readFile(file);
+        const kind = sniffImage(bytes);
+        const { bitmap, previewUrl } = await decodeImage(file, bytes, kind);
+        ic.items.push({
+          file,
+          name: file.name,
+          size: file.size,
+          kind,
+          width: bitmap.width,
+          height: bitmap.height,
+          previewUrl,
+          out: null, // set after compressing: { blob, url, type, width, height }
+        });
+        bitmap.close();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+    drawIc();
+  });
+
+  const releaseItem = (it) => {
+    URL.revokeObjectURL(it.previewUrl);
+    if (it.out) URL.revokeObjectURL(it.out.url);
+  };
+  const outName = (it) =>
+    `${baseName(it.name)}-compressed.${IMAGE_FORMATS[it.out.type].ext}`;
+
+  function moveIc(from, to) {
+    if (to < 0 || to >= ic.items.length || from === to) return;
+    ic.items.splice(to, 0, ic.items.splice(from, 1)[0]);
+    ic.focus = to;
+    drawIc();
+  }
+  function removeIc(i) {
+    releaseItem(ic.items.splice(i, 1)[0]);
+    ic.focus = Math.min(i, ic.items.length - 1);
+    drawIc();
+  }
+
+  function viewIc(start) {
+    openImageViewer(
+      ic.items.map((it) => {
+        const original = {
+          url: it.previewUrl,
+          width: it.width,
+          height: it.height,
+          size: it.size,
+        };
+        if (!it.out || it.out.kept) return { ...original, name: it.name };
+        return {
+          name: it.name,
+          url: it.out.url,
+          width: it.out.width,
+          height: it.out.height,
+          size: it.out.blob.size,
+          original,
+        };
+      }),
+      start,
+    );
+  }
+
+  function drawIc() {
+    const { items } = ic;
+    const grid = $('#ic-grid');
+    const hadFocus = $$('.pframe', grid).indexOf(document.activeElement);
+    const focusIndex = ic.focus >= 0 ? ic.focus : hadFocus;
+    ic.focus = -1;
+    grid.innerHTML = '';
+    items.forEach((it, i) => {
+      const out = it.out;
+      const frame = el(
+        'div',
+        {
+          class: 'pframe',
+          role: 'button',
+          tabindex: '0',
+          'aria-label': `${it.name}, ${formatBytes(it.size)}${
+            out && !out.kept ? `, now ${formatBytes(out.blob.size)}` : ''
+          }. Open full size.`,
+          title: `${it.name} — click to view${
+            out && !out.kept ? ' and compare' : ''
+          }`,
+          onclick: () => viewIc(i),
+        },
+        el('img', { src: out ? out.url : it.previewUrl, alt: '' }),
+      );
+      frame.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          viewIc(i);
+        } else if (
+          e.shiftKey &&
+          (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+        ) {
+          e.preventDefault();
+          moveIc(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          removeIc(i);
+        }
+      });
+      let meta;
+      if (!out) {
+        meta = `${it.width} × ${it.height} · ${it.kind.label} · ${formatBytes(
+          it.size,
+        )}`;
+      } else if (out.kept) {
+        meta =
+          it.kind.mime === 'image/png'
+            ? `${formatBytes(
+                it.size,
+              )} · kept original — pick WebP or JPEG to shrink a PNG photo`
+            : `${formatBytes(it.size)} · already optimised, kept original`;
+      } else {
+        const pct = Math.round((1 - out.blob.size / it.size) * 100);
+        const fmt = IMAGE_FORMATS[out.type].label;
+        meta = el(
+          'span',
+          {},
+          `${formatBytes(it.size)} → ${formatBytes(out.blob.size)} `,
+          el(
+            'span',
+            { class: pct > 0 ? 'saving' : 'growth' },
+            pct > 0 ? `−${pct}%` : `+${-pct}%`,
+          ),
+          el('br'),
+          `${out.width} × ${out.height} · ${
+            it.kind.label === fmt ? fmt : `${it.kind.label} → ${fmt}`
+          }`,
+        );
+      }
+      const card = el(
+        'div',
+        { class: `pcard file-card image-card${out ? ' done' : ''}` },
+        frame,
+        el('div', { class: 'fcap', title: it.name }, it.name),
+        el('div', { class: 'fmeta muted small' }, meta),
+        el(
+          'div',
+          { class: 'pbar' },
+          el('span', { class: 'num' }, i + 1),
+          out &&
+            iconBtn('⬇', `Download ${it.name}`, () =>
+              out.kept
+                ? downloadBlob(it.file, it.name)
+                : downloadBlob(out.blob, outName(it)),
+            ),
+          iconBtn('⤢', `View ${it.name} full size`, () => viewIc(i)),
+          iconBtn('✕', `Remove ${it.name}`, () => removeIc(i)),
+        ),
+      );
+      makeReorderable(card, i, ic, moveIc);
+      grid.append(card);
+    });
+    const n = items.length;
+    const done = items.filter((it) => it.out);
+    grid.hidden = !n;
+    $('#ic-run').disabled = !n;
+    $('#ic-clear').hidden = !n;
+    $('#ic-zip').hidden = done.length < 2;
+    if (!n) $('#ic-summary').textContent = 'Add images to get started.';
+    else if (done.length === n) {
+      const before = items.reduce((t, it) => t + it.size, 0);
+      const after = items.reduce(
+        (t, it) => t + (it.out.kept ? it.size : it.out.blob.size),
+        0,
+      );
+      const pct = Math.round((1 - after / before) * 100);
+      $('#ic-summary').textContent = `${plural(n, 'image')} · ${formatBytes(
+        before,
+      )} → ${formatBytes(after)}${pct > 0 ? ` (${pct}% smaller)` : ''}`;
+    } else {
+      $('#ic-summary').textContent = `${plural(n, 'image')} · ${formatBytes(
+        items.reduce((t, it) => t + it.size, 0),
+      )} total`;
+    }
+    if (focusIndex >= 0) $$('.pframe', grid)[focusIndex]?.focus();
+  }
+
+  async function compressOne(it, { format, quality, maxSide }) {
+    const type = await outputType(format, it.kind);
+    // Target size: the chosen limit, then the canvas pixel limit.
+    let k = Math.min(1, maxSide / Math.max(it.width, it.height));
+    k = Math.min(k, Math.sqrt(MAX_PIXELS / (it.width * it.height)));
+    const w = Math.max(1, Math.round(it.width * k));
+    const h = Math.max(1, Math.round(it.height * k));
+
+    const { bitmap: full } = await decodeImage(
+      it.file,
+      await readFile(it.file),
+      it.kind,
+    ).then((r) => {
+      URL.revokeObjectURL(r.previewUrl);
+      return r;
+    });
+    const bitmap =
+      w === full.width && h === full.height
+        ? full
+        : await createImageBitmap(full, {
+            resizeWidth: w,
+            resizeHeight: h,
+            resizeQuality: 'high',
+          });
+    const canvas = el('canvas', { width: w, height: h });
+    const ctx = canvas.getContext('2d');
+    if (type === 'image/jpeg') {
+      // JPEG has no transparency: put see-through areas on white, not black.
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    if (bitmap !== full) bitmap.close();
+    full.close();
+    const blob = await new Promise((r) =>
+      canvas.toBlob(r, type, IMAGE_FORMATS[type].lossy ? quality : undefined),
+    );
+    if (!blob) throw new Error(`${it.name} could not be encoded`);
+    // Keep the original file when re-saving didn't help: same format and size
+    // but no smaller, or an automatic ("Same format") conversion that grew.
+    // HEIC is the exception there — that setting promises a JPEG.
+    const converted = type !== it.kind.mime;
+    const resized = w !== it.width || h !== it.height;
+    const noGain = blob.size >= it.size;
+    if (
+      noGain &&
+      ((!converted && !resized) ||
+        (converted && format === 'keep' && it.kind.label !== 'HEIC'))
+    ) {
+      return { kept: true, type, width: w, height: h };
+    }
+    return { blob, url: URL.createObjectURL(blob), type, width: w, height: h };
+  }
+
+  $('#ic-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const settings = {
+        format: $('#ic-format').value,
+        quality: clampNum($('#ic-quality').value, 10, 100, 75) / 100,
+        maxSide: +$('#ic-size').value || Infinity,
+      };
+      const status = $('#ic-summary');
+      for (let i = 0; i < ic.items.length; i++) {
+        const it = ic.items[i];
+        status.textContent = `Compressing ${i + 1} of ${ic.items.length}…`;
+        if (it.out && !it.out.kept) URL.revokeObjectURL(it.out.url);
+        it.out = null;
+        try {
+          it.out = await compressOne(it, settings);
+        } catch (err) {
+          console.error(err);
+          toast(`${it.name}: ${err.message}`, 'error');
+        }
+        await new Promise((r) => setTimeout(r, 0));
+      }
+      ic.items = ic.items.filter((it) => it.out); // drop anything that failed
+      drawIc();
+      $('#ic-grid').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }),
+  );
+
+  $('#ic-zip').addEventListener('click', () => {
+    const files = ic.items
+      .filter((it) => it.out)
+      .map((it) =>
+        it.out.kept
+          ? { name: it.name, blob: it.file }
+          : { name: outName(it), blob: it.out.blob },
+      );
+    Promise.all(
+      files.map(async (f) => ({
+        name: f.name,
+        bytes: new Uint8Array(await f.blob.arrayBuffer()),
+      })),
+    )
+      .then((entries) =>
+        downloadBlob(makeZip(entries), 'compressed-images.zip'),
+      )
+      .catch((err) => toast(err.message, 'error'));
+  });
+
+  $('#ic-clear').addEventListener('click', () => {
+    ic.items.forEach(releaseItem);
+    ic.items = [];
+    drawIc();
+  });
+
+  $('#ic-quality').addEventListener('input', (e) => {
+    $('#ic-quality-val').textContent = `${e.target.value}%`;
+  });
+  // Quality only matters for lossy formats.
+  const syncQuality = () => {
+    $('#ic-quality').disabled = $('#ic-format').value === 'image/png';
+  };
+  $('#ic-format').addEventListener('change', syncQuality);
+
+  // Offer AVIF/WebP only where this browser can actually write them.
+  (async () => {
+    for (const type of ['image/webp']) {
+      const option = $(`#ic-format option[value="${type}"]`);
+      if (!(await canEncode(type))) {
+        option.disabled = true;
+        option.textContent += ' — not supported in this browser';
+      }
+    }
+  })();
 
   // ---------------------------------------------------------------- metadata
 
