@@ -111,6 +111,9 @@
             <button type="button" data-tool="imgcompress">
               <span class="ico" aria-hidden="true">▧</span>Compress images
             </button>
+            <button type="button" data-tool="resize">
+              <span class="ico" aria-hidden="true">▭</span>Resize photo
+            </button>
             <button type="button" data-tool="meta">
               <span class="ico" aria-hidden="true">ⓘ</span>Info &amp; metadata
             </button>
@@ -841,6 +844,230 @@
             <button type="button" class="primary" id="ic-run" disabled>
               Compress images
             </button>
+          </div>
+        </section>
+
+        <!-- Resize photo -->
+        <section
+          class="tool card"
+          id="tool-resize"
+          aria-labelledby="h-resize"
+          hidden
+        >
+          <h1 id="h-resize">Resize photo</h1>
+          <p class="sub">
+            Set an exact size in pixels, mm, cm or inches &mdash; or pick a
+            passport, visa or social media size and position the crop.
+          </p>
+          <label class="drop" id="rs-drop">
+            <input type="file" accept="image/*,.heic,.heif,.avif,.bmp" hidden />
+            <strong>Choose a photo</strong> or drop it here
+          </label>
+          <div id="rs-work" hidden>
+            <div class="filechip" id="rs-file"></div>
+            <div class="form-grid cols">
+              <label
+                >Size
+                <select id="rs-preset">
+                  <option value="custom" selected>Custom size</option>
+                  <optgroup label="Passport &amp; ID photos">
+                    <option value="in-passport"
+                      >India passport — 35 × 45 mm</option
+                    >
+                    <option value="in-visa">India visa / OCI — 2 × 2 in</option>
+                    <option value="in-pan">India PAN card — 25 × 35 mm</option>
+                    <option value="us-passport"
+                      >US passport &amp; visa — 2 × 2 in</option
+                    >
+                    <option value="uk-passport"
+                      >UK passport — 35 × 45 mm</option
+                    >
+                    <option value="eu-visa"
+                      >Schengen / EU visa — 35 × 45 mm</option
+                    >
+                    <option value="ca-passport"
+                      >Canada passport — 50 × 70 mm</option
+                    >
+                    <option value="au-passport"
+                      >Australia passport — 35 × 45 mm</option
+                    >
+                    <option value="cn-visa">China visa — 33 × 48 mm</option>
+                    <option value="jp-passport"
+                      >Japan passport — 35 × 45 mm</option
+                    >
+                    <option value="my-passport"
+                      >Malaysia passport — 35 × 50 mm</option
+                    >
+                    <option value="stamp">Stamp size — 20 × 25 mm</option>
+                  </optgroup>
+                  <optgroup label="Social &amp; web">
+                    <option value="ig-square"
+                      >Instagram post — 1080 × 1080</option
+                    >
+                    <option value="ig-portrait"
+                      >Instagram portrait — 1080 × 1350</option
+                    >
+                    <option value="ig-story"
+                      >Instagram / WhatsApp story — 1080 × 1920</option
+                    >
+                    <option value="whatsapp"
+                      >WhatsApp profile — 500 × 500</option
+                    >
+                    <option value="linkedin"
+                      >LinkedIn profile — 400 × 400</option
+                    >
+                    <option value="youtube"
+                      >YouTube thumbnail — 1280 × 720</option
+                    >
+                    <option value="hd">Full HD — 1920 × 1080</option>
+                  </optgroup>
+                </select>
+              </label>
+              <label
+                >Width (length)
+                <input
+                  id="rs-width"
+                  type="number"
+                  min="1"
+                  step="any"
+                  inputmode="decimal"
+                />
+              </label>
+              <label
+                >Height (breadth)
+                <input
+                  id="rs-height"
+                  type="number"
+                  min="1"
+                  step="any"
+                  inputmode="decimal"
+                />
+              </label>
+              <label
+                >Unit
+                <select id="rs-unit">
+                  <option value="px" selected>pixels</option>
+                  <option value="mm">mm</option>
+                  <option value="cm">cm</option>
+                  <option value="in">inches</option>
+                </select>
+              </label>
+              <label id="rs-dpi-row" hidden
+                >Print resolution (DPI)
+                <input
+                  id="rs-dpi"
+                  type="number"
+                  min="30"
+                  max="1200"
+                  value="300"
+                />
+              </label>
+              <label class="inline check rs-lock"
+                ><input type="checkbox" id="rs-lock" checked /> Keep
+                proportions</label
+              >
+            </div>
+            <div class="form-grid cols">
+              <label
+                >Framing
+                <select id="rs-mode">
+                  <option value="crop" selected
+                    >Crop to fill — drag to position</option
+                  >
+                  <option value="fit">Fit inside — add a background</option>
+                  <option value="stretch">Stretch to size</option>
+                </select>
+              </label>
+              <label id="rs-bg-row" hidden
+                >Background
+                <input id="rs-bg" type="color" value="#ffffff" />
+              </label>
+              <label
+                >Save as
+                <select id="rs-format">
+                  <option value="image/jpeg" selected>JPEG</option>
+                  <option value="image/png">PNG</option>
+                </select>
+              </label>
+              <label>
+                <span class="labelrow"
+                  >Quality
+                  <output class="muted" id="rs-quality-val">92%</output></span
+                >
+                <input
+                  id="rs-quality"
+                  type="range"
+                  min="10"
+                  max="100"
+                  value="92"
+                />
+              </label>
+              <label
+                >Max file size (KB, optional)
+                <input
+                  id="rs-maxkb"
+                  type="number"
+                  min="5"
+                  step="1"
+                  placeholder="e.g. 100"
+                  inputmode="numeric"
+                />
+              </label>
+            </div>
+            <div class="rs-editor">
+              <div class="rs-stage">
+                <img id="rs-image" alt="Your photo" />
+                <div
+                  class="rs-crop"
+                  id="rs-crop"
+                  tabindex="0"
+                  role="group"
+                  aria-label="Crop area. Drag, or use the arrow keys to move it and + / − to zoom."
+                  hidden
+                >
+                  <span
+                    class="rs-guide"
+                    id="rs-guide"
+                    aria-hidden="true"
+                    hidden
+                  ></span>
+                </div>
+              </div>
+              <label class="rs-zoom" id="rs-zoom-row" hidden>
+                Zoom
+                <input
+                  id="rs-zoom"
+                  type="range"
+                  min="100"
+                  max="400"
+                  value="100"
+                />
+              </label>
+              <p class="hint">
+                Drag the box to choose what&rsquo;s kept. For passport photos,
+                line the face up with the dashed oval.
+              </p>
+            </div>
+            <div class="rs-result" id="rs-result" hidden>
+              <img
+                id="rs-out-image"
+                alt="Resized photo"
+                title="View full size"
+              />
+              <div>
+                <strong>✔ Resized</strong>
+                <p class="muted" id="rs-out-meta"></p>
+                <button type="button" class="primary" id="rs-download">
+                  Download
+                </button>
+              </div>
+            </div>
+            <div class="actions">
+              <span class="muted" id="rs-summary"></span>
+              <button type="button" class="primary" id="rs-run" disabled>
+                Resize photo
+              </button>
+            </div>
           </div>
         </section>
 

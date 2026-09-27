@@ -3065,6 +3065,465 @@
     }
   })();
 
+  // ------------------------------------------------------------ resize photo
+
+  // Preset sizes. Physical sizes are printed at `dpi` (300 unless noted).
+  const PHOTO_PRESETS = {
+    'in-passport': { w: 35, h: 45, unit: 'mm', passport: true },
+    'in-visa': { w: 2, h: 2, unit: 'in', passport: true },
+    'in-pan': { w: 25, h: 35, unit: 'mm', passport: true },
+    'us-passport': { w: 2, h: 2, unit: 'in', passport: true },
+    'uk-passport': { w: 35, h: 45, unit: 'mm', passport: true },
+    'eu-visa': { w: 35, h: 45, unit: 'mm', passport: true },
+    'ca-passport': { w: 50, h: 70, unit: 'mm', passport: true },
+    'au-passport': { w: 35, h: 45, unit: 'mm', passport: true },
+    'cn-visa': { w: 33, h: 48, unit: 'mm', passport: true },
+    'jp-passport': { w: 35, h: 45, unit: 'mm', passport: true },
+    'my-passport': { w: 35, h: 50, unit: 'mm', passport: true },
+    stamp: { w: 20, h: 25, unit: 'mm', passport: true },
+    'ig-square': { w: 1080, h: 1080, unit: 'px' },
+    'ig-portrait': { w: 1080, h: 1350, unit: 'px' },
+    'ig-story': { w: 1080, h: 1920, unit: 'px' },
+    whatsapp: { w: 500, h: 500, unit: 'px' },
+    linkedin: { w: 400, h: 400, unit: 'px' },
+    youtube: { w: 1280, h: 720, unit: 'px' },
+    hd: { w: 1920, h: 1080, unit: 'px' },
+  };
+  const UNIT_PER_INCH = { in: 1, cm: 2.54, mm: 25.4 };
+  const toPx = (value, unit, dpi) =>
+    unit === 'px'
+      ? Math.round(value)
+      : Math.round((value / UNIT_PER_INCH[unit]) * dpi);
+
+  const rs = {
+    file: null,
+    name: '',
+    bitmap: null, // the decoded, upright original
+    previewUrl: null,
+    crop: { cx: 0.5, cy: 0.5, zoom: 1 }, // centre (fraction of image) and zoom
+    out: null, // { blob, url, width, height }
+  };
+
+  /** Target size in pixels from the form, or null if incomplete. */
+  function rsTarget() {
+    const unit = $('#rs-unit').value;
+    const dpi = clampNum($('#rs-dpi').value, 30, 1200, 300);
+    const w = parseFloat($('#rs-width').value);
+    const h = parseFloat($('#rs-height').value);
+    if (!(w > 0) || !(h > 0)) return null;
+    let W = toPx(w, unit, dpi);
+    let H = toPx(h, unit, dpi);
+    // Stay within the browser's canvas limit (iOS Safari: ~16.7 MP).
+    const k = Math.min(1, Math.sqrt(MAX_PIXELS / (W * H)));
+    W = Math.max(1, Math.round(W * k));
+    H = Math.max(1, Math.round(H * k));
+    return { W, H, unit, dpi, w, h, capped: k < 1 };
+  }
+
+  /** The crop rectangle in image pixels for the current target and zoom. */
+  function rsCropRect() {
+    const t = rsTarget();
+    const { width: iw, height: ih } = rs.bitmap;
+    if (!t) return { x: 0, y: 0, w: iw, h: ih };
+    const aspect = t.W / t.H;
+    let w = iw / ih > aspect ? ih * aspect : iw;
+    let h = w / aspect;
+    w /= rs.crop.zoom;
+    h /= rs.crop.zoom;
+    const x = Math.min(iw - w, Math.max(0, rs.crop.cx * iw - w / 2));
+    const y = Math.min(ih - h, Math.max(0, rs.crop.cy * ih - h / 2));
+    return { x, y, w, h };
+  }
+
+  setupDrop($('#rs-drop'), async ([file]) => {
+    const bytes = await readFile(file);
+    const kind = sniffImage(bytes);
+    const { bitmap, previewUrl } = await decodeImage(file, bytes, kind);
+    rs.bitmap?.close();
+    if (rs.previewUrl) URL.revokeObjectURL(rs.previewUrl);
+    clearRsResult();
+    Object.assign(rs, {
+      file,
+      name: file.name,
+      bitmap,
+      previewUrl,
+      crop: { cx: 0.5, cy: 0.5, zoom: 1 },
+    });
+    $('#rs-work').hidden = false;
+    $('#rs-file').textContent = `${file.name} · ${bitmap.width} × ${
+      bitmap.height
+    } px · ${kind.label} · ${formatBytes(file.size)}`;
+    // Draw the crop box once the preview has laid out. (img.decode() can
+    // stall in background tabs, so use the load event.)
+    $('#rs-image').onload = syncRs;
+    $('#rs-image').src = previewUrl;
+    // Start from the photo's own size, proportions locked.
+    if ($('#rs-preset').value === 'custom') {
+      $('#rs-unit').value = 'px';
+      $('#rs-width').value = bitmap.width;
+      $('#rs-height').value = bitmap.height;
+    }
+    $('#rs-zoom').value = 100;
+    syncRs();
+  });
+
+  function clearRsResult() {
+    if (rs.out) URL.revokeObjectURL(rs.out.url);
+    rs.out = null;
+    $('#rs-result').hidden = true;
+  }
+
+  /** Updates the crop box, guides and summary to match the form. */
+  function syncRs() {
+    const unit = $('#rs-unit').value;
+    $('#rs-dpi-row').hidden = unit === 'px';
+    $('#rs-bg-row').hidden = $('#rs-mode').value !== 'fit';
+    $('#rs-quality').disabled = $('#rs-format').value !== 'image/jpeg';
+    $('#rs-maxkb').disabled = $('#rs-format').value !== 'image/jpeg';
+    const t = rsTarget();
+    $('#rs-summary').textContent = t
+      ? `Output: ${t.W} × ${t.H} px${
+          unit === 'px' ? '' : ` (${t.w} × ${t.h} ${unit} at ${t.dpi} DPI)`
+        }${t.capped ? ' — reduced to fit the browser’s limit' : ''}`
+      : 'Enter a width and height.';
+    $('#rs-run').disabled = !t || !rs.bitmap;
+    if (!rs.bitmap) return;
+
+    const cropping = $('#rs-mode').value === 'crop';
+    $('#rs-crop').hidden = !cropping;
+    $('#rs-zoom-row').hidden = !cropping;
+    const img = $('#rs-image');
+    const scale = img.clientWidth / rs.bitmap.width;
+    if (cropping && scale) {
+      const r = rsCropRect();
+      const box = $('#rs-crop');
+      box.style.left = `${r.x * scale}px`;
+      box.style.top = `${r.y * scale}px`;
+      box.style.width = `${r.w * scale}px`;
+      box.style.height = `${r.h * scale}px`;
+      // Face guide for passport-style presets: where the head should sit.
+      const preset = PHOTO_PRESETS[$('#rs-preset').value];
+      $('#rs-guide').hidden = !preset?.passport;
+    }
+  }
+
+  // Lock proportions: editing one side updates the other from the photo.
+  function onDimInput(which) {
+    if ($('#rs-preset').value !== 'custom') $('#rs-preset').value = 'custom';
+    if ($('#rs-lock').checked && rs.bitmap) {
+      const ratio = rs.bitmap.height / rs.bitmap.width;
+      const w = parseFloat($('#rs-width').value);
+      const h = parseFloat($('#rs-height').value);
+      const round = (v) =>
+        $('#rs-unit').value === 'px' ? Math.round(v) : +v.toFixed(1);
+      if (which === 'w' && w > 0) $('#rs-height').value = round(w * ratio);
+      if (which === 'h' && h > 0) $('#rs-width').value = round(h / ratio);
+    }
+    clearRsResult();
+    syncRs();
+  }
+  $('#rs-width').addEventListener('input', () => onDimInput('w'));
+  $('#rs-height').addEventListener('input', () => onDimInput('h'));
+  $('#rs-lock').addEventListener('change', () => onDimInput('w'));
+
+  // Changing the unit converts the current size so it stays the same.
+  let lastUnit = 'px';
+  $('#rs-unit').addEventListener('change', () => {
+    const unit = $('#rs-unit').value;
+    const dpi = clampNum($('#rs-dpi').value, 30, 1200, 300);
+    const inPx = (v) => toPx(v, lastUnit, dpi);
+    const fromPx = (px) =>
+      unit === 'px'
+        ? Math.round(px)
+        : +((px / dpi) * UNIT_PER_INCH[unit]).toFixed(1);
+    ['#rs-width', '#rs-height'].forEach((sel) => {
+      const v = parseFloat($(sel).value);
+      if (v > 0) $(sel).value = fromPx(inPx(v));
+    });
+    lastUnit = unit;
+    clearRsResult();
+    syncRs();
+  });
+
+  $('#rs-preset').addEventListener('change', () => {
+    const p = PHOTO_PRESETS[$('#rs-preset').value];
+    if (p) {
+      $('#rs-unit').value = p.unit;
+      lastUnit = p.unit;
+      $('#rs-width').value = p.w;
+      $('#rs-height').value = p.h;
+      $('#rs-lock').checked = false;
+      $('#rs-mode').value = 'crop';
+      if (p.unit !== 'px') $('#rs-dpi').value = 300;
+    } else if (rs.bitmap) {
+      $('#rs-unit').value = 'px';
+      lastUnit = 'px';
+      $('#rs-width').value = rs.bitmap.width;
+      $('#rs-height').value = rs.bitmap.height;
+      $('#rs-lock').checked = true;
+    }
+    rs.crop = { cx: 0.5, cy: 0.5, zoom: 1 };
+    $('#rs-zoom').value = 100;
+    clearRsResult();
+    syncRs();
+  });
+  [
+    '#rs-dpi',
+    '#rs-mode',
+    '#rs-format',
+    '#rs-bg',
+    '#rs-quality',
+    '#rs-maxkb',
+  ].forEach((sel) =>
+    $(sel).addEventListener('input', () => {
+      clearRsResult();
+      syncRs();
+    }),
+  );
+  $('#rs-quality').addEventListener('input', (e) => {
+    $('#rs-quality-val').textContent = `${e.target.value}%`;
+  });
+  $('#rs-zoom').addEventListener('input', (e) => {
+    rs.crop.zoom = +e.target.value / 100;
+    clearRsResult();
+    syncRs();
+  });
+  window.addEventListener(
+    'resize',
+    () => rs.bitmap && !$('#tool-resize').hidden && syncRs(),
+  );
+  document.addEventListener(
+    'toolchange',
+    (e) => e.detail === 'resize' && rs.bitmap && syncRs(),
+  );
+
+  // Drag the crop box (mouse, touch or pen), or move it with the arrow keys.
+  function moveCrop(dxPx, dyPx) {
+    const r = rsCropRect();
+    const { width: iw, height: ih } = rs.bitmap;
+    const cx = (r.x + r.w / 2 + dxPx) / iw;
+    const cy = (r.y + r.h / 2 + dyPx) / ih;
+    rs.crop.cx = Math.min(1 - r.w / 2 / iw, Math.max(r.w / 2 / iw, cx));
+    rs.crop.cy = Math.min(1 - r.h / 2 / ih, Math.max(r.h / 2 / ih, cy));
+    clearRsResult();
+    syncRs();
+  }
+  let dragFrom = null;
+  $('#rs-crop').addEventListener('pointerdown', (e) => {
+    dragFrom = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  $('#rs-crop').addEventListener('pointermove', (e) => {
+    if (!dragFrom) return;
+    const scale = $('#rs-image').clientWidth / rs.bitmap.width;
+    moveCrop(
+      (e.clientX - dragFrom.x) / scale,
+      (e.clientY - dragFrom.y) / scale,
+    );
+    dragFrom = { x: e.clientX, y: e.clientY };
+  });
+  const endDrag = () => (dragFrom = null);
+  $('#rs-crop').addEventListener('pointerup', endDrag);
+  $('#rs-crop').addEventListener('pointercancel', endDrag);
+  $('#rs-crop').addEventListener('keydown', (e) => {
+    const step =
+      (e.shiftKey ? 0.05 : 0.01) * Math.max(rs.bitmap.width, rs.bitmap.height);
+    const moves = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    if (moves[e.key]) {
+      e.preventDefault();
+      moveCrop(...moves[e.key]);
+    } else if (e.key === '+' || e.key === '=' || e.key === '-') {
+      e.preventDefault();
+      const z = clampNum(
+        +$('#rs-zoom').value + (e.key === '-' ? -10 : 10),
+        100,
+        400,
+        100,
+      );
+      $('#rs-zoom').value = z;
+      $('#rs-zoom').dispatchEvent(new Event('input'));
+    }
+  });
+
+  /** Writes the print resolution into a JPEG (JFIF) or PNG (pHYs) file so it
+   *  prints at the intended physical size. */
+  function setImageDpi(bytes, type, dpi) {
+    if (type === 'image/jpeg') {
+      const isJfif =
+        bytes[2] === 0xff &&
+        bytes[3] === 0xe0 &&
+        String.fromCharCode(...bytes.subarray(6, 11)) === 'JFIF\0';
+      if (isJfif) {
+        bytes[13] = 1; // density units: dots per inch
+        bytes[14] = dpi >> 8;
+        bytes[15] = dpi & 255;
+        bytes[16] = dpi >> 8;
+        bytes[17] = dpi & 255;
+        return bytes;
+      }
+      const app0 = [
+        0xff,
+        0xe0,
+        0,
+        16,
+        0x4a,
+        0x46,
+        0x49,
+        0x46,
+        0,
+        1,
+        1,
+        1,
+        dpi >> 8,
+        dpi & 255,
+        dpi >> 8,
+        dpi & 255,
+        0,
+        0,
+      ];
+      const out = new Uint8Array(bytes.length + app0.length);
+      out.set(bytes.subarray(0, 2));
+      out.set(app0, 2);
+      out.set(bytes.subarray(2), 2 + app0.length);
+      return out;
+    }
+    if (type === 'image/png') {
+      const ppm = Math.round(dpi / 0.0254); // pixels per metre
+      const chunk = new Uint8Array(21);
+      const view = new DataView(chunk.buffer);
+      view.setUint32(0, 9);
+      chunk.set([0x70, 0x48, 0x59, 0x73], 4); // "pHYs"
+      view.setUint32(8, ppm);
+      view.setUint32(12, ppm);
+      chunk[16] = 1; // unit: metre
+      view.setUint32(17, crc32(chunk.subarray(4, 17)));
+      const at = 33; // right after the 8-byte signature and the IHDR chunk
+      const out = new Uint8Array(bytes.length + chunk.length);
+      out.set(bytes.subarray(0, at));
+      out.set(chunk, at);
+      out.set(bytes.subarray(at), at + chunk.length);
+      return out;
+    }
+    return bytes;
+  }
+
+  $('#rs-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const t = rsTarget();
+      if (!t) throw new Error('Enter a width and height first.');
+      const mode = $('#rs-mode').value;
+      const type = $('#rs-format').value;
+      const canvas = el('canvas', { width: t.W, height: t.H });
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      const { width: iw, height: ih } = rs.bitmap;
+      if (mode === 'fit') {
+        ctx.fillStyle = $('#rs-bg').value;
+        ctx.fillRect(0, 0, t.W, t.H);
+        const k = Math.min(t.W / iw, t.H / ih);
+        const w = iw * k;
+        const h = ih * k;
+        ctx.drawImage(rs.bitmap, (t.W - w) / 2, (t.H - h) / 2, w, h);
+      } else {
+        if (type === 'image/jpeg') {
+          ctx.fillStyle = '#fff'; // JPEG has no transparency
+          ctx.fillRect(0, 0, t.W, t.H);
+        }
+        const r = mode === 'crop' ? rsCropRect() : { x: 0, y: 0, w: iw, h: ih };
+        ctx.drawImage(rs.bitmap, r.x, r.y, r.w, r.h, 0, 0, t.W, t.H);
+      }
+
+      const encode = (q) => new Promise((res) => canvas.toBlob(res, type, q));
+      let quality = clampNum($('#rs-quality').value, 10, 100, 92) / 100;
+      let blob = await encode(quality);
+      const maxKb =
+        type === 'image/jpeg' ? parseFloat($('#rs-maxkb').value) : NaN;
+      let note = '';
+      if (maxKb > 0 && blob.size > maxKb * 1024) {
+        // Find the highest quality that fits under the limit.
+        let lo = 0.05;
+        let hi = quality;
+        let best = null;
+        for (let i = 0; i < 8; i++) {
+          const q = (lo + hi) / 2;
+          const b = await encode(q);
+          if (b.size <= maxKb * 1024) {
+            best = { b, q };
+            lo = q;
+          } else hi = q;
+        }
+        if (best) {
+          blob = best.b;
+          quality = best.q;
+          note = `quality lowered to ${Math.round(
+            quality * 100,
+          )}% to fit ${maxKb} KB`;
+        } else {
+          toast(
+            `Couldn’t get under ${maxKb} KB at this size — try smaller dimensions.`,
+            'error',
+          );
+        }
+      }
+      const bytes = setImageDpi(
+        new Uint8Array(await blob.arrayBuffer()),
+        type,
+        t.dpi,
+      );
+      const out = new Blob([bytes], { type });
+      clearRsResult();
+      rs.out = {
+        blob: out,
+        url: URL.createObjectURL(out),
+        width: t.W,
+        height: t.H,
+      };
+      $('#rs-out-image').src = rs.out.url;
+      $('#rs-out-meta').textContent = [
+        `${t.W} × ${t.H} px`,
+        t.unit !== 'px' && `${t.w} × ${t.h} ${t.unit} at ${t.dpi} DPI`,
+        IMAGE_FORMATS[type].label,
+        formatBytes(out.size),
+        note,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      $('#rs-result').hidden = false;
+      $('#rs-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }).then(syncRs),
+  );
+
+  const rsOutName = () => {
+    const preset = $('#rs-preset');
+    const suffix =
+      preset.value === 'custom'
+        ? `${rs.out.width}x${rs.out.height}`
+        : preset.value;
+    return `${baseName(rs.name)}-${suffix}.${
+      IMAGE_FORMATS[rs.out.blob.type].ext
+    }`;
+  };
+  $('#rs-download').addEventListener('click', () =>
+    downloadBlob(rs.out.blob, rsOutName()),
+  );
+  $('#rs-out-image').addEventListener('click', () =>
+    openImageViewer([
+      {
+        url: rs.out.url,
+        name: rsOutName(),
+        width: rs.out.width,
+        height: rs.out.height,
+        size: rs.out.blob.size,
+      },
+    ]),
+  );
+
   // ---------------------------------------------------------------- metadata
 
   const meta = { bytes: null, name: '' };
