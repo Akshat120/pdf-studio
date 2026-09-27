@@ -444,13 +444,18 @@
 
   /** Renders a page into `canvas`, sized by `width` or by the longer side (`fit`).
    *  Returns the CSS-pixel viewport, used to map clicks to PDF coordinates. */
-  async function renderPage(pdf, pageNumber, canvas, { width, fit }) {
+  async function renderPage(
+    pdf,
+    pageNumber,
+    canvas,
+    { width, fit, maxDpr = Infinity },
+  ) {
     const page = await pdf.getPage(pageNumber);
     const base = page.getViewport({ scale: 1 });
     const scale = width
       ? width / base.width
       : fit / Math.max(base.width, base.height);
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     const hi = page.getViewport({ scale: scale * dpr });
     canvas.width = Math.round(hi.width);
     canvas.height = Math.round(hi.height);
@@ -467,7 +472,12 @@
     return page.getViewport({ scale });
   }
 
-  async function renderThumbs(bytes, container, { max = 12, fit = 220 } = {}) {
+  // Longest side of page thumbnails in the Merge and Organize grids (CSS px).
+  // Their sharpness is capped at 1.5x so a long PDF doesn't use too much memory.
+  const GRID_THUMB = 230;
+  const GRID_THUMB_OPTS = { fit: GRID_THUMB, maxDpr: 1.5 };
+
+  async function renderThumbs(bytes, container, { max = 12, fit = 300 } = {}) {
     container.innerHTML = '';
     if (!pdfjs) {
       container.append(
@@ -609,7 +619,7 @@
     const pdf = await openForView(bytes);
     try {
       const canvas = el('canvas');
-      await renderPage(pdf, 1, canvas, { fit: 150 });
+      await renderPage(pdf, 1, canvas, GRID_THUMB_OPTS);
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
       return URL.createObjectURL(blob);
     } finally {
@@ -750,7 +760,7 @@
       const { width, height } = p.getSize();
       const rotated = p.getRotation().angle % 180 !== 0;
       const [w, h] = rotated ? [height, width] : [width, height];
-      const k = 150 / Math.max(w, h);
+      const k = GRID_THUMB / Math.max(w, h);
       return el('canvas', {
         class: 'pending',
         role: 'img',
@@ -765,7 +775,7 @@
       (async () => {
         const pdf = await openForView(bytes);
         for (let i = 0; i < pdf.numPages && token === org.token; i++) {
-          await renderPage(pdf, i + 1, org.thumbs[i], { fit: 150 });
+          await renderPage(pdf, i + 1, org.thumbs[i], GRID_THUMB_OPTS);
           org.thumbs[i].classList.remove('pending');
         }
         pdf.destroy();
