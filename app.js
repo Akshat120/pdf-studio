@@ -732,7 +732,8 @@
       b.classList.toggle('active', active);
       if (active) {
         b.setAttribute('aria-current', 'page');
-        b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        // The phone menu button shows the current tool's name.
+        $('#menu-label').textContent = toolName(b);
       } else b.removeAttribute('aria-current');
     });
     $$('.tool').forEach((s) => (s.hidden = s.id !== `tool-${id}`));
@@ -740,8 +741,70 @@
     history.replaceState(null, '', `#${id}`);
     document.dispatchEvent(new CustomEvent('toolchange', { detail: id }));
   }
+  /** A nav button's label without its icon. */
+  const toolName = (b) =>
+    [...b.childNodes]
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => n.textContent)
+      .join('')
+      .trim();
+
+  // ---- phone menu: on narrow screens the sidebar is a slide-out drawer ----
+  const sidebar = $('#sidebar');
+  const menuToggle = $('#menu-toggle');
+  const phoneLayout = matchMedia('(max-width: 800px)');
+
+  function setDrawer(open, { moveFocus = true } = {}) {
+    sidebar.classList.toggle('open', open);
+    $('#drawer-backdrop').hidden = !open;
+    menuToggle.setAttribute('aria-expanded', String(open));
+    menuToggle.setAttribute(
+      'aria-label',
+      open ? 'Close the tools menu' : 'Open the tools menu',
+    );
+    document.body.classList.toggle('drawer-open', open);
+    // While closed on phones the drawer is off-screen: keep it out of tab order.
+    sidebar.inert = phoneLayout.matches && !open;
+    if (!moveFocus) return;
+    if (open) ($('#nav button.active') || $('#nav button')).focus();
+    else menuToggle.focus();
+  }
+  const drawerOpen = () => sidebar.classList.contains('open');
+
+  menuToggle.addEventListener('click', () => setDrawer(!drawerOpen()));
+  $('#drawer-close').addEventListener('click', () => setDrawer(false));
+  $('#drawer-backdrop').addEventListener('click', () => setDrawer(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawerOpen()) setDrawer(false);
+  });
+  // Swipe left on the drawer to close it.
+  let swipeX = null;
+  sidebar.addEventListener(
+    'touchstart',
+    (e) => (swipeX = e.touches[0].clientX),
+    {
+      passive: true,
+    },
+  );
+  sidebar.addEventListener('touchend', (e) => {
+    if (swipeX !== null && e.changedTouches[0].clientX - swipeX < -60)
+      setDrawer(false);
+    swipeX = null;
+  });
+  phoneLayout.addEventListener('change', () =>
+    setDrawer(false, { moveFocus: false }),
+  );
+  setDrawer(false, { moveFocus: false });
+
   $$('#nav button').forEach((b) =>
-    b.addEventListener('click', () => showTool(b.dataset.tool)),
+    b.addEventListener('click', () => {
+      showTool(b.dataset.tool);
+      if (drawerOpen()) {
+        setDrawer(false, { moveFocus: false });
+        $('#main').focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+      }
+    }),
   );
   showTool(location.hash.slice(1));
   window.addEventListener('hashchange', () => showTool(location.hash.slice(1)));

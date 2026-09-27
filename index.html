@@ -34,6 +34,17 @@
 
     <header class="topbar">
       <div class="topbar-inner">
+        <button
+          type="button"
+          class="menu-toggle"
+          id="menu-toggle"
+          aria-controls="sidebar"
+          aria-expanded="false"
+          aria-label="Open the tools menu"
+        >
+          <span class="burger" aria-hidden="true"></span>
+          <span class="menu-label" id="menu-label">Tools</span>
+        </button>
         <div class="brand">
           <span class="logo" aria-hidden="true">PDF</span> Studio
           <sup class="badge" title="Version 1.0">v1.0</sup>
@@ -52,9 +63,21 @@
     </noscript>
 
     <div class="layout">
-      <aside class="sidebar">
+      <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+      <aside class="sidebar" id="sidebar" aria-label="Tools menu">
         <div class="box">
-          <h3 id="tools-heading">Tools</h3>
+          <h3 id="tools-heading">
+            Tools
+            <button
+              type="button"
+              class="drawer-close"
+              id="drawer-close"
+              aria-label="Close the tools menu"
+              title="Close"
+            >
+              ×
+            </button>
+          </h3>
           <nav id="nav" aria-labelledby="tools-heading">
             <button type="button" data-tool="merge">
               <span class="ico" aria-hidden="true">⧉</span>Merge PDFs
