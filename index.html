@@ -92,6 +92,10 @@
               <span class="ico" aria-hidden="true">&#x1F513;&#xFE0E;</span
               >Remove password
             </button>
+            <button type="button" data-tool="lock">
+              <span class="ico" aria-hidden="true">&#x1F512;&#xFE0E;</span>Lock
+              PDF
+            </button>
             <button type="button" data-tool="edit">
               <span class="ico" aria-hidden="true">✎</span>Add text &amp; images
             </button>
@@ -604,6 +608,101 @@
             >
             <button type="button" class="primary" id="unlock-run" hidden>
               Unlock PDF
+            </button>
+          </div>
+        </section>
+
+        <!-- Lock PDF -->
+        <section
+          class="tool card"
+          id="tool-lock"
+          aria-labelledby="h-lock"
+          hidden
+        >
+          <h1 id="h-lock">Lock PDF</h1>
+          <p class="sub">
+            Protect a PDF with a password, and optionally stop others printing,
+            copying or editing it. Uses AES-256, the strongest PDF encryption.
+          </p>
+          <label class="drop" id="lock-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="lock-file" class="filechip" hidden></div>
+          <div class="form-grid cols">
+            <label
+              >Password to open
+              <input
+                id="lock-password"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                autocapitalize="off"
+                placeholder="Leave empty for no open password"
+              />
+              <span class="hint" id="lock-strength"></span>
+            </label>
+            <label
+              >Confirm password
+              <input
+                id="lock-confirm"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                autocapitalize="off"
+              />
+              <span class="hint" id="lock-match"></span>
+            </label>
+          </div>
+          <fieldset class="perms" id="lock-perms">
+            <legend>Allow people to&hellip;</legend>
+            <label class="inline check"
+              ><input type="checkbox" id="lock-print" checked /> Print</label
+            >
+            <label class="inline check"
+              ><input type="checkbox" id="lock-copy" checked /> Copy text &amp;
+              images</label
+            >
+            <label class="inline check"
+              ><input type="checkbox" id="lock-edit" checked /> Edit the
+              document</label
+            >
+            <label class="inline check"
+              ><input type="checkbox" id="lock-forms" checked /> Fill forms
+              &amp; add comments</label
+            >
+          </fieldset>
+          <details class="lock-advanced">
+            <summary>Permissions password (optional)</summary>
+            <label
+              >Password to change permissions
+              <input
+                id="lock-owner"
+                type="password"
+                autocomplete="new-password"
+                spellcheck="false"
+                autocapitalize="off"
+                placeholder="A random one is used if empty"
+              />
+            </label>
+            <p class="hint">
+              Only needed if you want to lift the restrictions later in a PDF
+              editor. If you leave it empty, a strong random one is used.
+            </p>
+          </details>
+          <p class="hint lock-note">
+            <label class="inline check"
+              ><input type="checkbox" id="lock-show" /> Show passwords</label
+            >
+            &middot; Keep your password safe &mdash; a forgotten password
+            can&rsquo;t be recovered. Nothing is uploaded.
+          </p>
+          <div class="actions">
+            <span class="muted" id="lock-status" aria-live="polite"
+              >Choose a PDF above to begin.</span
+            >
+            <button type="button" class="primary" id="lock-run" disabled>
+              Lock PDF
             </button>
           </div>
         </section>

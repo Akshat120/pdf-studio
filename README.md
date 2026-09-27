@@ -13,6 +13,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                     |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                    |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                        |
+| **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                  |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo                                   |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                                       |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten                                  |
@@ -78,7 +79,8 @@ vendor/
   added. Photos are converted to high-quality JPEGs before being placed in the PDF.
 - [**qpdf**](https://github.com/qpdf/qpdf) 12.2.0, compiled to WebAssembly
   ([`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm)),
-  decrypts PDFs for _Remove password_ (AES-256, AES-128 and RC4). It's bundled
+  decrypts PDFs for _Remove password_ (AES-256, AES-128 and RC4) and encrypts
+  them with AES-256 for _Lock PDF_. It's bundled
   in `vendor/qpdf/` (~1.3 MB) and only loaded when that tool is used, so
   passwords and files never leave the device.
 
@@ -138,6 +140,6 @@ Dillon, also MIT-licensed — see [`vendor/pdf-lib.LICENSE.md`](vendor/pdf-lib.L
 HEIC support is provided by [heic-to](https://github.com/hoppergee/heic-to)
 (LGPL-3.0), which the page loads unmodified from jsDelivr as a separate file.
 
-_Remove password_ uses [qpdf](https://github.com/qpdf/qpdf) (Apache-2.0) via
+_Remove password_ and _Lock PDF_ use [qpdf](https://github.com/qpdf/qpdf) (Apache-2.0) via
 [`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm) (ISC),
 bundled unmodified in `vendor/qpdf/` with qpdf's license and notice files.

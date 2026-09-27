@@ -393,11 +393,13 @@
     );
   }
 
-  function openForView(bytes) {
+  function openForView(bytes, password) {
     // pdf.js takes ownership of the buffer it is given, so pass a copy.
     // isEvalSupported: false guards against malicious fonts (CVE-2024-4367).
+    // `password` opens PDFs locked by the Lock PDF tool.
     return pdfjs.getDocument({
       data: bytes.slice(),
+      password,
       cMapUrl: `${PDFJS_CDN}cmaps/`,
       cMapPacked: true,
       standardFontDataUrl: `${PDFJS_CDN}standard_fonts/`,
@@ -450,7 +452,7 @@
   async function renderThumbs(
     bytes,
     container,
-    { max = 12, fit = 300, onOpenTitle = () => '' } = {},
+    { max = 12, fit = 300, onOpenTitle = () => '', password } = {},
   ) {
     container.innerHTML = '';
     if (!pdfjs) {
@@ -463,7 +465,7 @@
       );
       return;
     }
-    const pdf = await openForView(bytes);
+    const pdf = await openForView(bytes, password);
     const n = Math.min(pdf.numPages, max);
     for (let i = 1; i <= n; i++) {
       const canvas = el('canvas');
@@ -479,7 +481,11 @@
               title: 'View full size',
               'aria-label': `View page ${i} full size`,
               onclick: () =>
-                openViewer(bytes, { start: i - 1, title: onOpenTitle() }),
+                openViewer(bytes, {
+                  start: i - 1,
+                  title: onOpenTitle(),
+                  password,
+                }),
             },
             canvas,
           ),
@@ -506,24 +512,36 @@
   // Set when the user has edits that exist only in memory (see beforeunload).
   let unsaved = false;
 
-  async function showResult(bytes, filename, note = '') {
-    const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  /** Shows a finished PDF. `password` is needed to preview PDFs that were
+   *  just locked (pdf-lib can't read encrypted files, so pdf.js counts pages). */
+  async function showResult(bytes, filename, note = '', { password } = {}) {
+    let pages;
+    try {
+      pages = (
+        await PDFDocument.load(bytes, { updateMetadata: false })
+      ).getPageCount();
+    } catch (e) {
+      if (!pdfjs) throw e;
+      const pdf = await openForView(bytes, password);
+      pages = pdf.numPages;
+      pdf.destroy();
+    }
     result.bytes = bytes;
     if (result.url) URL.revokeObjectURL(result.url);
     result.url = URL.createObjectURL(
       new Blob([bytes], { type: 'application/pdf' }),
     );
     $('#result-name').value = filename;
-    $('#result-meta').textContent = `${plural(
-      doc.getPageCount(),
-      'page',
-    )} · ${formatBytes(bytes.length)}${note ? ` · ${note}` : ''}`;
+    $('#result-meta').textContent = `${plural(pages, 'page')} · ${formatBytes(
+      bytes.length,
+    )}${note ? ` · ${note}` : ''}`;
     const section = $('#result');
     section.hidden = false;
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     section.focus({ preventScroll: true });
     await renderThumbs(bytes, $('#result-thumbs'), {
       onOpenTitle: () => $('#result-name').value,
+      password,
     });
   }
 
@@ -575,7 +593,10 @@
     drawViewer();
   }
 
-  async function openViewer(bytes, { pages, start = 0, title = '' } = {}) {
+  async function openViewer(
+    bytes,
+    { pages, start = 0, title = '', password } = {},
+  ) {
     if (!pdfjs) {
       toast(
         'The page viewer needs previews, which could not load (offline?)',
@@ -586,7 +607,7 @@
     closeViewer({ restoreFocus: false });
     viewer.returnFocus = document.activeElement;
     const token = ++viewer.token;
-    const pdf = await openForView(bytes);
+    const pdf = await openForView(bytes, password);
     if (token !== viewer.token) return pdf.destroy();
     viewer.pdf = pdf;
     viewer.images = null;
@@ -747,6 +768,7 @@
       .filter((n) => n.nodeType === Node.TEXT_NODE)
       .map((n) => n.textContent)
       .join('')
+      .replace(/\s+/g, ' ') // the HTML formatter may wrap long labels
       .trim();
 
   // ---- phone menu: on narrow screens the sidebar is a slide-out drawer ----
@@ -2131,6 +2153,164 @@
       // run() re-enables and relabels the button; restore this tool's state.
       if (unlock.state)
         setUnlockState(unlock.state, $('#unlock-status').textContent);
+    }),
+  );
+
+  // ---------------------------------------------------------------- lock
+
+  const lock = { bytes: null, name: '' };
+
+  setupDrop($('#lock-drop'), async ([file]) => {
+    const bytes = await readFile(file);
+    // qpdf can re-lock PDFs that open freely (plain or restrictions-only), but
+    // one that needs a password to open must be unlocked first.
+    const probe = await runQpdf(['--decrypt', '/in.pdf', '/out.pdf'], bytes);
+    if (!qpdfOk(probe)) {
+      if (wrongPassword(probe)) {
+        throw new Error(
+          `${file.name} already has a password. Remove it first with the Remove password tool.`,
+        );
+      }
+      console.warn(probe.log);
+      throw new Error(`${file.name} doesn’t look like a valid PDF.`);
+    }
+    // Lock a clean, unencrypted copy so old restrictions don't carry over.
+    Object.assign(lock, { bytes: probe.output, name: file.name });
+    const chip = $('#lock-file');
+    chip.hidden = false;
+    chip.textContent = `${file.name} · ${formatBytes(bytes.length)}`;
+    $('#lock-run').disabled = false;
+    syncLockForm();
+    $('#lock-password').focus();
+  });
+
+  /** Checks the form and explains what will happen; returns an error or ''. */
+  function lockProblem() {
+    const pw = $('#lock-password').value;
+    const confirm = $('#lock-confirm').value;
+    const restricted = $$('#lock-perms input').some((c) => !c.checked);
+    if (!pw && !restricted)
+      return 'Enter a password, or untick a permission to restrict.';
+    if (pw && pw !== confirm) return 'The two passwords don’t match.';
+    const owner = $('#lock-owner').value;
+    if (owner && pw && owner === pw) {
+      return 'Use a different permissions password — otherwise anyone who can open the PDF can remove the restrictions.';
+    }
+    return '';
+  }
+
+  function syncLockForm() {
+    const pw = $('#lock-password').value;
+    const confirm = $('#lock-confirm').value;
+    const match = $('#lock-match');
+    match.textContent =
+      !pw || !confirm
+        ? ''
+        : pw === confirm
+        ? '✔ Passwords match'
+        : '✖ Passwords don’t match';
+    match.className = `hint ${
+      pw && confirm ? (pw === confirm ? 'ok-text' : 'bad-text') : ''
+    }`;
+    $('#lock-strength').textContent =
+      pw && pw.length < 8 ? 'Tip: 8+ characters are much harder to guess.' : '';
+    if (!lock.bytes) return;
+    const restricted = $$('#lock-perms input').some((c) => !c.checked);
+    $('#lock-status').textContent =
+      lockProblem() ||
+      (pw
+        ? `Anyone opening it will need the password${
+            restricted ? ', and some actions will be blocked' : ''
+          }.`
+        : 'It will open without a password, but the unticked actions will be blocked.');
+  }
+  ['#lock-password', '#lock-confirm', '#lock-owner'].forEach((sel) =>
+    $(sel).addEventListener('input', syncLockForm),
+  );
+  $$('#lock-perms input').forEach((c) =>
+    c.addEventListener('change', syncLockForm),
+  );
+  $('#lock-show').addEventListener('change', (e) => {
+    ['#lock-password', '#lock-confirm', '#lock-owner'].forEach(
+      (sel) => ($(sel).type = e.target.checked ? 'text' : 'password'),
+    );
+  });
+
+  /** A random password, used when restrictions are set without one. */
+  function randomPassword() {
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    return btoa(String.fromCharCode(...bytes))
+      .replace(/[+/=]/g, '')
+      .slice(0, 24);
+  }
+
+  $('#lock-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const problem = lockProblem();
+      if (problem) throw new Error(problem);
+      const user = $('#lock-password').value;
+      const allow = (id) => $(`#${id}`).checked;
+      const restricted = $$('#lock-perms input').some((c) => !c.checked);
+      // Restrictions only mean something if the owner password is secret.
+      const owner =
+        $('#lock-owner').value || (restricted ? randomPassword() : user);
+      const modify = allow('lock-edit')
+        ? 'all'
+        : allow('lock-forms')
+        ? 'form'
+        : 'none';
+      const args = [
+        '/in.pdf',
+        '--encrypt',
+        `--user-password=${user}`,
+        `--owner-password=${owner}`,
+        '--bits=256',
+        `--print=${allow('lock-print') ? 'full' : 'none'}`,
+        `--extract=${allow('lock-copy') ? 'y' : 'n'}`,
+        `--modify=${modify}`,
+        // --modify=form would also allow reordering pages; only editing should.
+        `--assemble=${allow('lock-edit') ? 'y' : 'n'}`,
+        `--annotate=${allow('lock-forms') || allow('lock-edit') ? 'y' : 'n'}`,
+        '--',
+        '/out.pdf',
+      ];
+      const r = await runQpdf(args, lock.bytes);
+      if (!qpdfOk(r)) {
+        console.warn(r.log);
+        throw new Error('This PDF could not be locked.');
+      }
+      // Double-check with qpdf that the result is AES-256 encrypted as asked.
+      const check = await runQpdf(
+        [`--password=${user}`, '--show-encryption', '/in.pdf'],
+        r.output,
+      );
+      if (!/R = 6/.test(check.log) || !/AESv3/.test(check.log)) {
+        console.warn(check.log);
+        throw new Error('Locking could not be verified; please try again.');
+      }
+      const blocked = [
+        !allow('lock-print') && 'printing',
+        !allow('lock-copy') && 'copying',
+        !allow('lock-edit') && 'editing',
+        !allow('lock-forms') && 'forms & comments',
+      ].filter(Boolean);
+      const note = [
+        user ? 'password to open' : 'no open password',
+        'AES-256',
+        blocked.length && `blocked: ${blocked.join(', ')}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      ['#lock-password', '#lock-confirm', '#lock-owner'].forEach(
+        (sel) => ($(sel).value = ''),
+      );
+      syncLockForm();
+      $('#lock-status').textContent = user
+        ? 'Locked. Keep your password safe — it can’t be recovered.'
+        : 'Locked with restrictions.';
+      await showResult(r.output, `${baseName(lock.name)}-locked.pdf`, note, {
+        password: user,
+      });
     }),
   );
 
