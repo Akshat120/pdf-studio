@@ -14,7 +14,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with undo                |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                           |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten      |
-| **Images to PDF**     | Turn JPG / PNG / WebP / GIF images into a PDF, with page size, orientation and margins        |
+| **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF, with page size, orientation and margins |
 | **Info & metadata**   | Inspect page count, sizes and dates; edit title, author, subject, keywords, creator, producer |
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
@@ -64,6 +64,11 @@ vendor/
   with `isEvalSupported: false` (the mitigation for CVE-2024-4367). If it can't
   load — for example offline — every tool except _Add text & images_ still
   works, just without previews.
+- [**heic-to**](https://github.com/hoppergee/heic-to) 1.5.2 (libheif compiled to
+  WebAssembly) decodes HEIC/HEIF photos, such as those from iPhones, in browsers
+  that can't do it natively (everything except Safari). It's ~3 MB, so it's only
+  loaded from jsDelivr — pinned with an SRI hash — the first time a HEIC image is
+  added. Photos are converted to high-quality JPEGs before being placed in the PDF.
 
 ### Updating pdf-lib
 
@@ -113,3 +118,6 @@ npx prettier --write "*.{html,css,js,md}"
 
 PDF Studio bundles [pdf-lib](https://github.com/Hopding/pdf-lib) by Andrew
 Dillon, also MIT-licensed — see [`vendor/pdf-lib.LICENSE.md`](vendor/pdf-lib.LICENSE.md).
+
+HEIC support is provided by [heic-to](https://github.com/hoppergee/heic-to)
+(LGPL-3.0), which the page loads unmodified from jsDelivr as a separate file.

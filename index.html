@@ -270,10 +270,10 @@
               </div>
               <div id="edit-image-opts" class="form-grid" hidden>
                 <label
-                  >Image (PNG, JPG, WebP…)<input
+                  >Image (JPG, PNG, HEIC, WebP…)<input
                     id="edit-image"
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                 /></label>
                 <label
                   >Width (points)<input
@@ -431,10 +431,11 @@
         >
           <h1 id="h-images">Images to PDF</h1>
           <p class="sub">
-            Turn photos or scans into a PDF, one image per page.
+            Turn photos or scans (JPG, PNG, HEIC, WebP…) into a PDF, one image
+            per page.
           </p>
           <label class="drop" id="img-drop">
-            <input type="file" accept="image/*" multiple hidden />
+            <input type="file" accept="image/*,.heic,.heif" multiple hidden />
             <strong>Choose images</strong> or drop them here
           </label>
           <ul class="filelist" id="img-list" aria-label="Images"></ul>

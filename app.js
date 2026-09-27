@@ -145,19 +145,113 @@
     b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
   const isJpg = (b) => b[0] === 0xff && b[1] === 0xd8;
 
-  /** Returns PNG or JPG bytes; other formats (WebP, GIF, …) are converted to PNG. */
+  // ISO-BMFF "ftyp" brands used by HEIC/HEIF photos (e.g. from iPhones). AVIF
+  // shares the format; browsers decode AVIF themselves, so it's only sent to the
+  // HEIC decoder if the browser can't.
+  const HEIF_BRANDS = [
+    'heic',
+    'heix',
+    'hevc',
+    'hevx',
+    'heim',
+    'heis',
+    'hevm',
+    'hevs',
+    'mif1',
+    'msf1',
+    'avif',
+  ];
+  const isHeif = (b) =>
+    b.length > 12 &&
+    String.fromCharCode(...b.subarray(4, 8)) === 'ftyp' &&
+    HEIF_BRANDS.includes(String.fromCharCode(...b.subarray(8, 12)));
+
+  // Only Safari can decode HEIC natively, so other browsers get heic-to
+  // (libheif compiled to WebAssembly, ~3 MB). It's loaded the first time a
+  // HEIC image is added, pinned with a Subresource Integrity hash.
+  const HEIC_TO_URL =
+    'https://cdn.jsdelivr.net/npm/heic-to@1.5.2/dist/iife/heic-to.js';
+  const HEIC_TO_SRI =
+    'sha384-cVm8gaWQ5+URpoh6ACKXpm8TuyoHkfIDDBkxvDoUdIZ18w8nV5en0lVQvWMwO/6S';
+  let heicDecoder = null;
+
+  function loadHeicDecoder() {
+    if (!heicDecoder) {
+      toast('Loading the HEIC decoder (first time only)…');
+      heicDecoder = new Promise((resolve, reject) => {
+        const script = el('script', {
+          src: HEIC_TO_URL,
+          integrity: HEIC_TO_SRI,
+          crossorigin: 'anonymous',
+          referrerpolicy: 'no-referrer',
+        });
+        script.onload = () =>
+          window.HeicTo
+            ? resolve(window.HeicTo)
+            : reject(new Error('HEIC decoder failed to start'));
+        script.onerror = () => {
+          heicDecoder = null; // allow a retry, e.g. after reconnecting
+          reject(
+            new Error(
+              'Could not load the HEIC decoder. Check your internet connection and try again.',
+            ),
+          );
+        };
+        document.head.append(script);
+      });
+    }
+    return heicDecoder;
+  }
+
+  /** Returns PNG or JPG bytes for `file`. HEIC/HEIF and AVIF photos become JPEGs;
+   *  other formats (WebP, GIF, …) become PNGs so transparency is kept.
+   *  `from` names the original format when the image was converted. */
   async function normalizeImage(file) {
     const bytes = await readFile(file);
     if (isPng(bytes)) return { bytes, type: 'png' };
     if (isJpg(bytes)) return { bytes, type: 'jpg' };
-    const bitmap = await createImageBitmap(file).catch(() => {
-      throw new Error(`${file.name} is not a supported image`);
-    });
+    const heif = isHeif(bytes);
+    const from = heif
+      ? /\.avif$/i.test(file.name)
+        ? 'AVIF'
+        : 'HEIC'
+      : (file.type.split('/')[1] || 'image').toUpperCase();
+    const bitmap = await createImageBitmap(file).catch(() => null);
+    if (!bitmap) {
+      if (!heif) throw new Error(`${file.name} is not a supported image`);
+      const heicTo = await loadHeicDecoder();
+      try {
+        const jpeg = await heicTo({
+          blob: file,
+          type: 'image/jpeg',
+          quality: 0.92,
+        });
+        return {
+          bytes: new Uint8Array(await jpeg.arrayBuffer()),
+          type: 'jpg',
+          from,
+        };
+      } catch (e) {
+        console.error(e);
+        throw new Error(`${file.name} could not be decoded as a HEIC image`);
+      }
+    }
+    const type = heif ? 'jpg' : 'png';
     const canvas = el('canvas', { width: bitmap.width, height: bitmap.height });
     canvas.getContext('2d').drawImage(bitmap, 0, 0);
-    const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
-    return { bytes: new Uint8Array(await blob.arrayBuffer()), type: 'png' };
+    const blob = await new Promise((r) =>
+      canvas.toBlob(r, type === 'jpg' ? 'image/jpeg' : 'image/png', 0.92),
+    );
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), type, from };
   }
+
+  /** An object URL showing a normalized image (works even for HEIC in Chrome). */
+  const imageUrl = (img) =>
+    URL.createObjectURL(
+      new Blob([img.bytes], {
+        type: img.type === 'png' ? 'image/png' : 'image/jpeg',
+      }),
+    );
 
   const embedImage = (doc, img) =>
     img.type === 'png' ? doc.embedPng(img.bytes) : doc.embedJpg(img.bytes);
@@ -1369,11 +1463,7 @@
     for (const file of files) {
       try {
         const img = await normalizeImage(file);
-        imgs.items.push({
-          ...img,
-          name: file.name,
-          thumbUrl: URL.createObjectURL(file),
-        });
+        imgs.items.push({ ...img, name: file.name, thumbUrl: imageUrl(img) });
       } catch (e) {
         toast(e.message, 'error');
       }
@@ -1384,7 +1474,7 @@
   function drawImgs() {
     const n = imgs.items.length;
     renderFileList($('#img-list'), imgs.items, drawImgs, (i) =>
-      i.type.toUpperCase(),
+      i.from ? `${i.from} → ${i.type.toUpperCase()}` : i.type.toUpperCase(),
     );
     $('#img-run').disabled = !n;
     $('#img-clear').hidden = !n;
