@@ -2314,6 +2314,444 @@
     }),
   );
 
+  // ------------------------------------------------------------------ redact
+
+  // Areas are kept in PDF user space ({page, x1, y1, x2, y2}), so they stay put
+  // when zooming. On save, every page with an area is re-drawn as an image with
+  // the boxes painted in — the text, images and vectors underneath are dropped,
+  // not just covered. Untouched pages are copied over unchanged.
+  const rd = {
+    bytes: null,
+    name: '',
+    page: 0,
+    count: 0,
+    zoom: 1,
+    width: 0,
+    viewport: null,
+    token: 0,
+    boxes: [],
+    history: [], // [{ add: [...boxes], remove: [...boxes] }]
+    nextId: 1,
+    drawing: false,
+  };
+  const rdStage = $('#rd-stage');
+
+  function rdFitWidth() {
+    const box = $('#rd-scroll');
+    const cs = getComputedStyle(box);
+    return Math.floor(
+      box.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight) -
+        2,
+    );
+  }
+
+  setupDrop($('#rd-drop'), async ([file]) => {
+    if (!pdfjs) {
+      throw new Error(
+        'Redacting needs page previews, which could not load (are you offline?)',
+      );
+    }
+    const bytes = await readFile(file);
+    const doc = await loadPdf(bytes);
+    Object.assign(rd, {
+      bytes,
+      name: file.name,
+      page: 0,
+      count: doc.getPageCount(),
+      boxes: [],
+      history: [],
+    });
+    unsaved = false;
+    const select = $('#rd-page');
+    select.innerHTML = '';
+    for (let i = 0; i < rd.count; i++) {
+      select.append(el('option', { value: i }, i + 1));
+    }
+    $('#rd-count').textContent = `of ${rd.count}`;
+    $('#rd-find-status').textContent =
+      'Finds every match on every page (not case-sensitive).';
+    $('#rd-work').hidden = false;
+    await renderRd();
+  });
+
+  async function renderRd() {
+    const token = ++rd.token;
+    $('#rd-page').value = rd.page;
+    $('#rd-prev').disabled = rd.page === 0;
+    $('#rd-next').disabled = rd.page >= rd.count - 1;
+    syncRd();
+    const fitWidth = rdFitWidth();
+    if (fitWidth <= 0) return; // tool is hidden; it re-renders when shown
+    $('#rd-zoom-label').textContent =
+      rd.zoom === 1 ? 'Fit width' : `${Math.round(rd.zoom * 100)}%`;
+    $('#rd-zoom-out').disabled = rd.zoom <= ZOOM_LEVELS[0];
+    $('#rd-zoom-in').disabled = rd.zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
+    const pdf = await openForView(rd.bytes);
+    const canvas = el('canvas');
+    const viewport = await renderPage(pdf, rd.page + 1, canvas, {
+      width: Math.round(fitWidth * rd.zoom),
+    });
+    pdf.destroy();
+    if (token !== rd.token) return;
+    $('canvas', rdStage)?.remove();
+    rdStage.prepend(canvas);
+    rd.viewport = viewport;
+    rd.width = fitWidth;
+    drawRdBoxes();
+  }
+
+  /** Screen rectangle (CSS px, relative to the page) of a PDF-space box. */
+  function rdScreenRect(b, viewport = rd.viewport) {
+    const [a, c, d, e] = viewport.convertToViewportRectangle([
+      b.x1,
+      b.y1,
+      b.x2,
+      b.y2,
+    ]);
+    return {
+      left: Math.min(a, d),
+      top: Math.min(c, e),
+      width: Math.abs(d - a),
+      height: Math.abs(e - c),
+    };
+  }
+
+  function drawRdBoxes() {
+    $$('.rd-box', rdStage).forEach((n) => n.remove());
+    if (!rd.viewport) return;
+    const color = $('#rd-color').value;
+    for (const b of rd.boxes) {
+      if (b.page !== rd.page) continue;
+      const r = rdScreenRect(b);
+      const box = el(
+        'div',
+        { class: 'rd-box' },
+        el(
+          'button',
+          {
+            type: 'button',
+            class: 'rd-remove',
+            title: 'Remove this box',
+            'aria-label': 'Remove this box',
+            onclick: () => rdChange({ remove: [b] }),
+          },
+          '×',
+        ),
+      );
+      Object.assign(box.style, {
+        left: `${r.left}px`,
+        top: `${r.top}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        background: color,
+      });
+      box.classList.toggle('light', color === '#ffffff');
+      rdStage.append(box);
+    }
+  }
+
+  /** Applies (and records, for undo) a change to the marked areas. */
+  function rdChange(change, record = true) {
+    const remove = new Set((change.remove || []).map((b) => b.id));
+    rd.boxes = rd.boxes.filter((b) => !remove.has(b.id));
+    rd.boxes.push(...(change.add || []));
+    if (record) rd.history.push(change);
+    unsaved = rd.boxes.length > 0;
+    drawRdBoxes();
+    syncRd();
+  }
+
+  function syncRd() {
+    const pages = new Set(rd.boxes.map((b) => b.page)).size;
+    const here = rd.boxes.filter((b) => b.page === rd.page).length;
+    $('#rd-summary').textContent = rd.boxes.length
+      ? `${plural(rd.boxes.length, 'area')} marked on ${plural(pages, 'page')}${
+          here ? ` (${here} on this page)` : ''
+        }.`
+      : 'No areas marked yet.';
+    $('#rd-undo').disabled = !rd.history.length;
+    $('#rd-clear').disabled = !here;
+    $('#rd-run').disabled = !rd.boxes.length;
+  }
+
+  const rdBox = (page, x1, y1, x2, y2) => ({
+    id: rd.nextId++,
+    page,
+    x1: Math.min(x1, x2),
+    y1: Math.min(y1, y2),
+    x2: Math.max(x1, x2),
+    y2: Math.max(y1, y2),
+  });
+
+  // Drag to draw a box. In "Scroll" mode touches scroll the page instead.
+  let rdStart = null;
+  let rdGhost = null;
+  const rdLocal = (e) => {
+    const r = $('canvas', rdStage).getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(r.width, e.clientX - r.left)),
+      Math.max(0, Math.min(r.height, e.clientY - r.top)),
+    ];
+  };
+  rdStage.addEventListener('pointerdown', (e) => {
+    if (!rd.viewport || !$('canvas', rdStage)) return;
+    if (e.button !== 0 || e.target.closest('.rd-remove')) return;
+    if (rdStage.classList.contains('scroll-mode')) return;
+    e.preventDefault();
+    try {
+      rdStage.setPointerCapture(e.pointerId);
+    } catch {} // keeps drawing if the pointer leaves the page
+    rdStart = rdLocal(e);
+    rdGhost = el('div', { class: 'rd-box drawing' });
+    rdStage.append(rdGhost);
+  });
+  rdStage.addEventListener('pointermove', (e) => {
+    if (!rdStart) return;
+    const [x, y] = rdLocal(e);
+    Object.assign(rdGhost.style, {
+      left: `${Math.min(x, rdStart[0])}px`,
+      top: `${Math.min(y, rdStart[1])}px`,
+      width: `${Math.abs(x - rdStart[0])}px`,
+      height: `${Math.abs(y - rdStart[1])}px`,
+    });
+  });
+  const rdEnd = (e) => {
+    if (!rdStart) return;
+    const [x, y] = rdLocal(e);
+    const [sx, sy] = rdStart;
+    rdStart = null;
+    rdGhost.remove();
+    if (e.type === 'pointercancel') return;
+    if (Math.abs(x - sx) < 4 || Math.abs(y - sy) < 4) return; // a tap
+    const [x1, y1] = rd.viewport.convertToPdfPoint(sx, sy);
+    const [x2, y2] = rd.viewport.convertToPdfPoint(x, y);
+    rdChange({ add: [rdBox(rd.page, x1, y1, x2, y2)] });
+  };
+  rdStage.addEventListener('pointerup', rdEnd);
+  rdStage.addEventListener('pointercancel', rdEnd);
+
+  $$('#tool-redact [data-rdmode]').forEach((b) =>
+    b.addEventListener('click', () => {
+      $$('#tool-redact [data-rdmode]').forEach((x) => {
+        x.classList.toggle('active', x === b);
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      rdStage.classList.toggle('scroll-mode', b.dataset.rdmode === 'scroll');
+    }),
+  );
+
+  const rdGo = (page) => {
+    rd.page = Math.max(0, Math.min(rd.count - 1, page));
+    renderRd();
+  };
+  $('#rd-prev').addEventListener('click', () => rdGo(rd.page - 1));
+  $('#rd-next').addEventListener('click', () => rdGo(rd.page + 1));
+  $('#rd-page').addEventListener('change', (e) => rdGo(+e.target.value));
+  $('#rd-zoom-in').addEventListener('click', () => {
+    const next = ZOOM_LEVELS.find((z) => z > rd.zoom);
+    if (next) (rd.zoom = next), renderRd();
+  });
+  $('#rd-zoom-out').addEventListener('click', () => {
+    const prev = [...ZOOM_LEVELS].reverse().find((z) => z < rd.zoom);
+    if (prev) (rd.zoom = prev), renderRd();
+  });
+  $('#rd-color').addEventListener('change', drawRdBoxes);
+
+  $('#rd-undo').addEventListener('click', () => {
+    const last = rd.history.pop();
+    if (!last) return;
+    rdChange({ add: last.remove, remove: last.add }, false);
+  });
+  $('#rd-clear').addEventListener('click', () =>
+    rdChange({ remove: rd.boxes.filter((b) => b.page === rd.page) }),
+  );
+  document.addEventListener('keydown', (e) => {
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      e.key.toLowerCase() === 'z' &&
+      !$('#tool-redact').hidden &&
+      !e.target.matches('input, textarea') &&
+      rd.history.length
+    ) {
+      e.preventDefault();
+      $('#rd-undo').click();
+    }
+  });
+
+  // Find text: pdf.js reports text in runs with a transform and a width, so a
+  // match inside a run is located by measuring the characters before it.
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  measureCtx.font = '100px Helvetica, Arial, sans-serif';
+
+  function textMatchBox(item, start, end) {
+    const [a, b, c, d, e, f] = item.transform;
+    const len = Math.hypot(a, b) || 1;
+    const [ux, uy] = [a / len, b / len]; // along the baseline
+    const [px, py] = [-uy, ux]; // "up"
+    const h = item.height || Math.hypot(c, d) || 10;
+    const full = measureCtx.measureText(item.str).width || 1;
+    const s0 =
+      (measureCtx.measureText(item.str.slice(0, start)).width / full) *
+      item.width;
+    const s1 =
+      (measureCtx.measureText(item.str.slice(0, end)).width / full) *
+      item.width;
+    const pad = h * 0.12;
+    const xs = [];
+    const ys = [];
+    for (const s of [s0 - pad, s1 + pad]) {
+      for (const v of [-0.3 * h, 1.0 * h]) {
+        xs.push(e + ux * s + px * v);
+        ys.push(f + uy * s + py * v);
+      }
+    }
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  $('#rd-find-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const query = $('#rd-find').value.trim().toLowerCase();
+      if (!query) throw new Error('Type the text to find first');
+      const pdf = await openForView(rd.bytes);
+      const add = [];
+      const pages = new Set();
+      const same = (x, y) =>
+        x.page === y.page &&
+        Math.abs(x.x1 - y.x1) < 0.5 &&
+        Math.abs(x.y1 - y.y1) < 0.5 &&
+        Math.abs(x.x2 - y.x2) < 0.5;
+      try {
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const { items } = await (await pdf.getPage(p)).getTextContent();
+          for (const item of items) {
+            const text = (item.str || '').toLowerCase();
+            for (
+              let i = text.indexOf(query);
+              i !== -1;
+              i = text.indexOf(query, i + 1)
+            ) {
+              const box = rdBox(
+                p - 1,
+                ...textMatchBox(item, i, i + query.length),
+              );
+              if ([...rd.boxes, ...add].some((o) => same(o, box))) continue;
+              add.push(box);
+              pages.add(p);
+            }
+          }
+        }
+      } finally {
+        pdf.destroy();
+      }
+      if (!add.length) {
+        $('#rd-find-status').textContent = `No new matches for “${$(
+          '#rd-find',
+        ).value.trim()}”. Scanned pages have no text to search — mark them by hand.`;
+        return;
+      }
+      rdChange({ add });
+      $('#rd-find-status').textContent = `Marked ${plural(
+        add.length,
+        'match',
+      ).replace('matchs', 'matches')} on ${plural(pages.size, 'page')}.`;
+      if (!pages.has(rd.page + 1)) rdGo(Math.min(...pages) - 1);
+    }),
+  );
+  $('#rd-find').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#rd-find-run').click();
+  });
+
+  $('#rd-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const src = await loadPdf(rd.bytes);
+      const out = await PDFDocument.create();
+      const dpi = +$('#rd-dpi').value;
+      const color = $('#rd-color').value;
+      const marked = new Set(rd.boxes.map((b) => b.page));
+      const keep = [...Array(rd.count).keys()].filter((i) => !marked.has(i));
+      // One copyPages call, so pages that share fonts or images share them in
+      // the output too. Only what these pages use is copied.
+      const copied = await out.copyPages(src, keep);
+      const pdf = await openForView(rd.bytes);
+      try {
+        for (let i = 0; i < rd.count; i++) {
+          if (!marked.has(i)) {
+            out.addPage(copied[keep.indexOf(i)]);
+            continue;
+          }
+          const page = await pdf.getPage(i + 1);
+          const size = page.getViewport({ scale: 1 });
+          let scale = dpi / 72;
+          const px = size.width * size.height * scale * scale;
+          if (px > MAX_PIXELS) scale *= Math.sqrt(MAX_PIXELS / px);
+          const vp = page.getViewport({ scale });
+          const canvas = el('canvas');
+          canvas.width = Math.round(vp.width);
+          canvas.height = Math.round(vp.height);
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({
+            canvasContext: ctx,
+            viewport: vp,
+            intent: 'print',
+            annotationMode: pdfjs.AnnotationMode.ENABLE,
+          }).promise;
+          ctx.fillStyle = color;
+          for (const b of rd.boxes) {
+            if (b.page !== i) continue;
+            const r = rdScreenRect(b, vp);
+            // Round outwards so no sliver of the hidden content survives.
+            const x = Math.floor(r.left);
+            const y = Math.floor(r.top);
+            ctx.fillRect(
+              x,
+              y,
+              Math.ceil(r.left + r.width) - x,
+              Math.ceil(r.top + r.height) - y,
+            );
+          }
+          const blob = await new Promise((ok) =>
+            canvas.toBlob(ok, 'image/jpeg', 0.9),
+          );
+          canvas.width = canvas.height = 0; // free the pixels now
+          page.cleanup();
+          const img = await out.embedJpg(await blob.arrayBuffer());
+          out.addPage([size.width, size.height]).drawImage(img, {
+            x: 0,
+            y: 0,
+            width: size.width,
+            height: size.height,
+          });
+        }
+      } finally {
+        pdf.destroy();
+      }
+      const bytes = await out.save({ useObjectStreams: true });
+      unsaved = true; // until the result is downloaded
+      await showResult(
+        bytes,
+        `${baseName(rd.name)}-redacted.pdf`,
+        `${plural(marked.size, 'page')} redacted`,
+      );
+    }),
+  );
+
+  window.addEventListener('resize', () => {
+    clearTimeout(rd.resizeTimer);
+    rd.resizeTimer = setTimeout(() => {
+      if (!rd.bytes || $('#tool-redact').hidden) return;
+      const width = rdFitWidth();
+      if (width > 0 && width !== rd.width) renderRd();
+    }, 200);
+  });
+  document.addEventListener('toolchange', (e) => {
+    if (e.detail !== 'redact' || !rd.bytes) return;
+    if (rdFitWidth() !== rd.width) renderRd();
+  });
+
   // ---------------------------------------------------------------- compress
 
   const {

@@ -14,6 +14,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                           |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
+| **Redact PDF**        | Black out areas for good: drag boxes or find text on every page; marked pages are flattened so hidden text is removed            |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo                                          |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                                              |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten                                         |
@@ -116,6 +117,9 @@ These come from pdf-lib:
 - Compression can't touch specialised image encodings (JBIG2, CCITT, JPEG 2000),
   CMYK or indexed-colour images, so some scanned PDFs shrink less than with
   desktop tools. Text-only PDFs are usually compact already.
+- Redacted pages become images, so their remaining text can't be selected or
+  searched, and the output drops bookmarks, form fields and document info.
+  Scanned pages have no text for _Find text_ — mark them by hand.
 - No text extraction or conversion to images.
 
 ## Browser support

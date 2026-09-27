@@ -96,6 +96,9 @@
               <span class="ico" aria-hidden="true">&#x1F512;&#xFE0E;</span>Lock
               PDF
             </button>
+            <button type="button" data-tool="redact">
+              <span class="ico" aria-hidden="true">▬</span>Redact PDF
+            </button>
             <button type="button" data-tool="edit">
               <span class="ico" aria-hidden="true">✎</span>Add text &amp; images
             </button>
@@ -707,6 +710,151 @@
             <button type="button" class="primary" id="lock-run" disabled>
               Lock PDF
             </button>
+          </div>
+        </section>
+
+        <!-- Redact -->
+        <section
+          class="tool card"
+          id="tool-redact"
+          aria-labelledby="h-redact"
+          hidden
+        >
+          <h1 id="h-redact">Redact PDF</h1>
+          <p class="sub">
+            Black out names, numbers, signatures or anything else &mdash; for
+            good. Drag boxes over what to hide, or find text to mark it
+            everywhere.
+          </p>
+          <label class="drop" id="rd-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div class="edit-grid" id="rd-work" hidden>
+            <div class="stage-col">
+              <div class="pagenav">
+                <button
+                  type="button"
+                  id="rd-prev"
+                  class="icon"
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <label class="inline" for="rd-page">Page</label>
+                <select id="rd-page"></select>
+                <span class="muted" id="rd-count"></span>
+                <button
+                  type="button"
+                  id="rd-next"
+                  class="icon"
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+                <span class="spacer"></span>
+                <span class="zoom" role="group" aria-label="Zoom">
+                  <button
+                    type="button"
+                    id="rd-zoom-out"
+                    class="icon"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    −
+                  </button>
+                  <output id="rd-zoom-label" aria-live="polite"
+                    >Fit width</output
+                  >
+                  <button
+                    type="button"
+                    id="rd-zoom-in"
+                    class="icon"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                </span>
+              </div>
+              <div class="stage-scroll" id="rd-scroll">
+                <div
+                  class="stage rd-stage"
+                  id="rd-stage"
+                  aria-label="Page preview. Drag to mark an area to black out."
+                ></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="tabs" role="group" aria-label="Touch mode">
+                <button
+                  type="button"
+                  data-rdmode="draw"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  ▬ Mark
+                </button>
+                <button type="button" data-rdmode="scroll" aria-pressed="false">
+                  ✋ Scroll
+                </button>
+              </div>
+              <p class="hint">
+                Drag across the page to mark an area. Click a box&rsquo;s
+                &times; to remove it.
+              </p>
+              <div class="form-grid">
+                <label
+                  >Find text to mark
+                  <span class="rd-find">
+                    <input
+                      id="rd-find"
+                      placeholder="e.g. a name or account number"
+                      spellcheck="false"
+                    />
+                    <button type="button" id="rd-find-run">Mark all</button>
+                  </span>
+                </label>
+                <p class="hint" id="rd-find-status">
+                  Finds every match on every page (not case-sensitive).
+                </p>
+                <label
+                  >Box colour
+                  <select id="rd-color">
+                    <option value="#000000">Black</option>
+                    <option value="#ffffff">White (invisible)</option>
+                  </select>
+                </label>
+                <label
+                  >Quality of redacted pages
+                  <select id="rd-dpi">
+                    <option value="150">Standard (150 DPI, smaller)</option>
+                    <option value="200" selected>High (200 DPI)</option>
+                    <option value="300">Print (300 DPI, larger)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="pos" aria-live="polite" id="rd-summary">
+                No areas marked yet.
+              </div>
+              <div class="two">
+                <button type="button" id="rd-undo" title="Undo (Ctrl+Z)" disabled>
+                  Undo
+                </button>
+                <button type="button" id="rd-clear" disabled>Clear page</button>
+              </div>
+              <button type="button" class="primary block" id="rd-run" disabled>
+                Redact &amp; save
+              </button>
+              <p class="hint">
+                Pages with boxes are turned into images, so the hidden text is
+                really gone &mdash; not just covered. Their other text
+                can&rsquo;t be selected afterwards. Pages without boxes stay as
+                they are. Bookmarks, form fields and document info are removed.
+              </p>
+            </div>
           </div>
         </section>
 
