@@ -12,6 +12,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order                                    |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                     |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                    |
+| **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                        |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo                                   |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                                       |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten                                  |
@@ -75,6 +76,11 @@ vendor/
   that can't do it natively (everything except Safari). It's ~3 MB, so it's only
   loaded from jsDelivr — pinned with an SRI hash — the first time a HEIC image is
   added. Photos are converted to high-quality JPEGs before being placed in the PDF.
+- [**qpdf**](https://github.com/qpdf/qpdf) 12.2.0, compiled to WebAssembly
+  ([`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm)),
+  decrypts PDFs for _Remove password_ (AES-256, AES-128 and RC4). It's bundled
+  in `vendor/qpdf/` (~1.3 MB) and only loaded when that tool is used, so
+  passwords and files never leave the device.
 
 ### Updating pdf-lib
 
@@ -99,8 +105,9 @@ curl -L -o vendor/pdf-lib.min.js https://cdn.jsdelivr.net/npm/pdf-lib@<version>/
 
 These come from pdf-lib:
 
-- Password-protected (encrypted) PDFs can't be opened — the app shows a clear
-  error.
+- Other tools can't open password-protected PDFs directly — unlock them
+  first with _Remove password_ (you need the password if one is required to
+  open the file).
 - Text uses the 14 standard PDF fonts, which only support Latin characters.
 - Merging PDFs whose form fields share names can link those fields together.
 - Compression can't touch specialised image encodings (JBIG2, CCITT, JPEG 2000),
@@ -130,3 +137,7 @@ Dillon, also MIT-licensed — see [`vendor/pdf-lib.LICENSE.md`](vendor/pdf-lib.L
 
 HEIC support is provided by [heic-to](https://github.com/hoppergee/heic-to)
 (LGPL-3.0), which the page loads unmodified from jsDelivr as a separate file.
+
+_Remove password_ uses [qpdf](https://github.com/qpdf/qpdf) (Apache-2.0) via
+[`@neslinesli93/qpdf-wasm`](https://github.com/neslinesli93/qpdf-wasm) (ISC),
+bundled unmodified in `vendor/qpdf/` with qpdf's license and notice files.

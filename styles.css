@@ -949,6 +949,30 @@ label.check input {
   background: #b94a48;
 }
 
+/* ---------- remove password ---------- */
+.unlock-show {
+  align-self: end;
+  padding-bottom: 7px;
+}
+.unlock-note {
+  margin: 10px 0 0;
+}
+.shake {
+  border-color: #b94a48 !important;
+  animation: shake 0.35s;
+}
+@keyframes shake {
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
 /* ---------- compress: level picker ---------- */
 .levels {
   display: grid;

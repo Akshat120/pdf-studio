@@ -134,7 +134,7 @@
     } catch (e) {
       if (/encrypted/i.test(e.message)) {
         throw new Error(
-          'This PDF is password-protected. PDF Studio cannot open encrypted PDFs.',
+          'This PDF is password-protected. Unlock it first with the Remove password tool.',
         );
       }
       throw new Error(`Could not read this PDF (${e.message})`);
@@ -1955,6 +1955,182 @@
         });
       }
       await showResult(await out.save(), 'images.pdf');
+    }),
+  );
+
+  // ---------------------------------------------------------- remove password
+
+  // pdf-lib can't decrypt PDFs, so this tool uses qpdf compiled to WebAssembly
+  // (vendor/qpdf, ~1.3 MB), loaded the first time it's needed.
+  let qpdfLoader = null;
+  const QPDF_DIR = new URL('vendor/qpdf/', location.href).href;
+
+  function loadQpdf() {
+    if (!qpdfLoader) {
+      qpdfLoader = new Promise((resolve, reject) => {
+        const script = el('script', { src: `${QPDF_DIR}qpdf.js` });
+        script.onload = () => {
+          const factory = window.Module; // qpdf.js defines this global
+          if (typeof factory === 'function') resolve(factory);
+          else reject(new Error('qpdf did not start'));
+        };
+        script.onerror = reject;
+        document.head.append(script);
+      }).catch((e) => {
+        qpdfLoader = null; // allow a retry
+        console.error(e);
+        throw new Error(
+          'Could not load the PDF unlocking engine. Check your connection and try again.',
+        );
+      });
+    }
+    return qpdfLoader;
+  }
+
+  /** Runs qpdf with `args` on `input` (as /in.pdf) in a fresh instance.
+   *  Returns its exit code, messages, and /out.pdf if it wrote one. */
+  async function runQpdf(args, input) {
+    const factory = await loadQpdf();
+    // qpdf writes its messages (e.g. "invalid password") to the console, and
+    // binds console.error/log when the instance is created. So capture the
+    // console from creation until it finishes, then restore it.
+    let log = '';
+    const saved = [console.log, console.warn, console.error];
+    console.log = console.warn = console.error = (...parts) =>
+      (log += `${parts.join(' ')}\n`);
+    let code;
+    let output = null;
+    try {
+      // This build only honours a few options (not print/printErr/wasmBinary);
+      // locateFile points it at the bundled .wasm, which the browser caches.
+      const qpdf = await factory({
+        noInitialRun: true,
+        locateFile: (file) => QPDF_DIR + file,
+      }).catch((e) => {
+        throw new Error(
+          `Could not start the PDF unlocking engine (${e?.message || e})`,
+        );
+      });
+      qpdf.FS.writeFile('/in.pdf', input);
+      try {
+        code = qpdf.callMain(args);
+      } catch (e) {
+        if (typeof e?.status !== 'number') throw e; // qpdf called exit()
+        code = e.status;
+      }
+      try {
+        output = qpdf.FS.readFile('/out.pdf');
+      } catch (_) {
+        // no output written
+      }
+    } finally {
+      [console.log, console.warn, console.error] = saved;
+    }
+    return { code, log, output };
+  }
+  // qpdf exits 0 on success and 3 on success with warnings (e.g. minor damage).
+  const qpdfOk = (r) => (r.code === 0 || r.code === 3) && r.output;
+  const wrongPassword = (r) => /invalid password/i.test(r.log);
+
+  const unlock = { bytes: null, name: '', state: null, output: null };
+
+  function setUnlockState(state, message) {
+    unlock.state = state;
+    $('#unlock-status').textContent = message;
+    $('#unlock-password-row').hidden = state !== 'password';
+    $('#unlock-run').hidden = state === 'plain' || !state;
+    $('#unlock-run').disabled = !state;
+    $('#unlock-run').textContent =
+      state === 'restricted' ? 'Remove restrictions' : 'Unlock PDF';
+  }
+
+  setupDrop($('#unlock-drop'), async ([file]) => {
+    const bytes = await readFile(file);
+    Object.assign(unlock, { bytes, name: file.name, output: null });
+    $('#unlock-password').value = '';
+    $('#unlock-password').classList.remove('shake');
+    const chip = $('#unlock-file');
+    chip.hidden = false;
+    chip.textContent = `${file.name} · ${formatBytes(bytes.length)}`;
+    setUnlockState(null, 'Checking the PDF…');
+    // Try to decrypt with no password: that succeeds for PDFs that open freely
+    // (plain, or only restricted) and fails with "invalid password" otherwise.
+    const attempt = await runQpdf(['--decrypt', '/in.pdf', '/out.pdf'], bytes);
+    if (qpdfOk(attempt)) {
+      const check = await runQpdf(['--is-encrypted', '/in.pdf'], bytes);
+      if (check.code === 0) {
+        unlock.output = attempt.output;
+        setUnlockState(
+          'restricted',
+          'This PDF opens without a password but is locked against things like printing, copying or editing. Remove those restrictions?',
+        );
+      } else {
+        setUnlockState(
+          'plain',
+          'This PDF isn’t password-protected — there’s nothing to remove.',
+        );
+      }
+    } else if (wrongPassword(attempt)) {
+      setUnlockState(
+        'password',
+        'This PDF needs a password to open. Enter it to unlock the PDF.',
+      );
+      $('#unlock-password').focus();
+    } else {
+      console.warn(attempt.log);
+      setUnlockState(null, '');
+      throw new Error(`${file.name} doesn’t look like a valid PDF.`);
+    }
+  });
+
+  $('#unlock-show').addEventListener('change', (e) => {
+    $('#unlock-password').type = e.target.checked ? 'text' : 'password';
+  });
+  $('#unlock-password').addEventListener('input', (e) =>
+    e.target.classList.remove('shake'),
+  );
+  $('#unlock-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#unlock-run').click();
+  });
+
+  $('#unlock-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      let output = unlock.output;
+      if (unlock.state === 'password') {
+        const password = $('#unlock-password').value;
+        if (!password) throw new Error('Enter the PDF’s password first.');
+        const r = await runQpdf(
+          [`--password=${password}`, '--decrypt', '/in.pdf', '/out.pdf'],
+          unlock.bytes,
+        );
+        if (wrongPassword(r)) {
+          const field = $('#unlock-password');
+          field.select();
+          field.classList.remove('shake');
+          void field.offsetWidth; // restart the animation
+          field.classList.add('shake');
+          throw new Error(
+            'That password isn’t correct. Check it and try again.',
+          );
+        }
+        if (!qpdfOk(r)) {
+          console.warn(r.log);
+          throw new Error('This PDF could not be unlocked.');
+        }
+        output = r.output;
+      }
+      $('#unlock-password').value = '';
+      $('#unlock-status').textContent =
+        'Unlocked — the new PDF opens without a password.';
+      await showResult(
+        output,
+        `${baseName(unlock.name)}-unlocked.pdf`,
+        'password removed',
+      );
+    }).then(() => {
+      // run() re-enables and relabels the button; restore this tool's state.
+      if (unlock.state)
+        setUnlockState(unlock.state, $('#unlock-status').textContent);
     }),
   );
 

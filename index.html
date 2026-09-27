@@ -88,6 +88,10 @@
             <button type="button" data-tool="compress">
               <span class="ico" aria-hidden="true">⇲</span>Compress PDF
             </button>
+            <button type="button" data-tool="unlock">
+              <span class="ico" aria-hidden="true">&#x1F513;&#xFE0E;</span
+              >Remove password
+            </button>
             <button type="button" data-tool="edit">
               <span class="ico" aria-hidden="true">✎</span>Add text &amp; images
             </button>
@@ -554,6 +558,52 @@
             <button type="button" id="img-clear" hidden>Clear all</button>
             <button type="button" class="primary" id="img-run" disabled>
               Create PDF
+            </button>
+          </div>
+        </section>
+
+        <!-- Remove password -->
+        <section
+          class="tool card"
+          id="tool-unlock"
+          aria-labelledby="h-unlock"
+          hidden
+        >
+          <h1 id="h-unlock">Remove password</h1>
+          <p class="sub">
+            Unlock a password-protected PDF, or remove restrictions on printing,
+            copying and editing, so it opens freely everywhere.
+          </p>
+          <label class="drop" id="unlock-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div id="unlock-file" class="filechip" hidden></div>
+          <div class="form-grid cols" id="unlock-password-row" hidden>
+            <label
+              >Password
+              <input
+                id="unlock-password"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                autocapitalize="off"
+              />
+            </label>
+            <label class="inline check unlock-show"
+              ><input type="checkbox" id="unlock-show" /> Show password</label
+            >
+          </div>
+          <p class="hint unlock-note">
+            Only unlock PDFs you own or have permission to open. Your file and
+            password never leave your device.
+          </p>
+          <div class="actions">
+            <span class="muted" id="unlock-status" aria-live="polite"
+              >Choose a PDF above to begin.</span
+            >
+            <button type="button" class="primary" id="unlock-run" hidden>
+              Unlock PDF
             </button>
           </div>
         </section>
