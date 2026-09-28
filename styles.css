@@ -69,21 +69,10 @@ textarea {
   text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
 }
 .logo {
-  display: inline-block;
-  padding: 6px 8px;
-  font-size: 14px;
-  letter-spacing: 0;
-  border: 1px solid #8e1b1b;
-  border-radius: 6px;
-  background: linear-gradient(
-    to bottom,
-    #ff7b6b 0%,
-    #e53e2c 50%,
-    #cc2a19 51%,
-    #b01e10 100%
-  );
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 2px 3px rgba(0, 0, 0, 0.35);
+  display: block;
+  width: 46px;
+  height: 46px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
 }
 .brand .badge {
   align-self: flex-start;
@@ -1581,8 +1570,8 @@ body.busy * {
     font-size: 21px;
   }
   .logo {
-    padding: 4px 5px;
-    font-size: 11px;
+    width: 34px;
+    height: 34px;
   }
   .brand .badge {
     display: none; /* room for the current tool's name in the menu button */
