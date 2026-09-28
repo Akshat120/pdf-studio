@@ -60,6 +60,7 @@ folder, …):
 index.html
 styles.css
 app.js
+icons/
 vendor/
 └── pdf-lib.min.js
 ```

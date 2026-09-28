@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb2f0"/><stop offset=".48" stop-color="#3f79cf"/><stop offset=".52" stop-color="#2e62b5"/><stop offset="1" stop-color="#1d4690"/></linearGradient>
+<pattern id="pin" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="none"/><rect width="3" height="10" fill="#fff" opacity=".07"/></pattern>
+<linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe6ef"/></linearGradient>
+<linearGradient id="rd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a78"/><stop offset=".5" stop-color="#e2402d"/><stop offset=".5" stop-color="#cc2f1d"/><stop offset="1" stop-color="#a51f12"/></linearGradient>
+<linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3f08a"/><stop offset=".5" stop-color="#6cc12e"/><stop offset=".5" stop-color="#57a81d"/><stop offset="1" stop-color="#3c8410"/></linearGradient>
+<radialGradient id="shine" cx=".5" cy="-.35" r="1.05"><stop offset=".62" stop-color="#fff" stop-opacity=".55"/><stop offset=".63" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#06214d" flood-opacity=".6"/></filter>
+<filter id="emb"><feDropShadow dx="0" dy="-2" stdDeviation="0" flood-color="#6d0f06" flood-opacity=".8"/></filter>
+</defs>
+<rect x="6" y="6" width="500" height="500" rx="104" fill="#0f2f66"/>
+<rect x="10" y="10" width="492" height="492" rx="100" fill="url(#bg)"/>
+<rect x="10" y="10" width="492" height="492" rx="100" fill="url(#pin)"/>
+<rect x="11.5" y="11.5" width="489" height="489" rx="98.5" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="3"/>
+<g filter="url(#sh)">
+<path d="M156 84h150l76 76v252a18 18 0 0 1-18 18H156a18 18 0 0 1-18-18V102a18 18 0 0 1 18-18z" fill="url(#pg)" stroke="#9fb0c6" stroke-width="2"/>
+<path d="M306 84v58a18 18 0 0 0 18 18h58z" fill="#c6d1e0" stroke="#9fb0c6" stroke-width="2"/>
+<g fill="#b9c6d8"><rect x="166" y="186" width="150" height="13" rx="6.5"/><rect x="166" y="214" width="186" height="13" rx="6.5"/><rect x="166" y="242" width="128" height="13" rx="6.5"/></g>
+</g>
+<g filter="url(#sh)">
+<rect x="84" y="290" width="262" height="124" rx="22" fill="url(#rd)" stroke="#7d1409" stroke-width="3"/>
+<rect x="86.5" y="292.5" width="257" height="119" rx="20" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/>
+<text x="215" y="381" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="84" fill="#fff" filter="url(#emb)" letter-spacing="1">PDF</text>
+</g>
+<g transform="translate(372 314)" filter="url(#sh)"><circle r="62" fill="url(#gr)" stroke="#2e6a0b" stroke-width="3"/><circle r="56" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>
+<ellipse cx="0" cy="-26" rx="42" ry="24" fill="#fff" opacity=".4"/>
+<path d="M-26 2l17 18 36-38" fill="none" stroke="#1f5a05" stroke-opacity=".5" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 3)"/>
+<path d="M-26 2l17 18 36-38" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></g>
+<rect x="10" y="10" width="492" height="492" rx="100" fill="url(#shine)"/>
+</svg>
