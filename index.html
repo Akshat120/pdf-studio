@@ -118,7 +118,7 @@
               <span class="ico" aria-hidden="true">▭</span>Resize photo
             </button>
             <button type="button" data-tool="meta">
-              <span class="ico" aria-hidden="true">ⓘ</span>Info &amp; metadata
+              <span class="ico" aria-hidden="true">ⓘ</span>Title &amp; info
             </button>
           </nav>
         </div>
@@ -1226,9 +1226,10 @@
           aria-labelledby="h-meta"
           hidden
         >
-          <h1 id="h-meta">Info &amp; metadata</h1>
+          <h1 id="h-meta">Title &amp; info</h1>
           <p class="sub">
-            See what's inside a PDF and edit its document properties.
+            Change a PDF&rsquo;s title &mdash; the name shown in the browser tab
+            and reader&rsquo;s title bar &mdash; and its other properties.
           </p>
           <label class="drop" id="meta-drop">
             <input type="file" accept=".pdf,application/pdf" hidden />
@@ -1236,8 +1237,24 @@
           </label>
           <div id="meta-work" hidden>
             <dl class="facts" id="meta-facts"></dl>
+            <div class="form-grid meta-title">
+              <label
+                >Title
+                <input
+                  id="meta-title"
+                  placeholder="e.g. Quarterly Report — September 2026"
+                />
+              </label>
+              <label class="inline check"
+                ><input type="checkbox" id="meta-show-title" checked /> Show
+                the title instead of the file name when the PDF is opened</label
+              >
+              <label class="inline check"
+                ><input type="checkbox" id="meta-title-name" /> Also use the
+                title as the file name</label
+              >
+            </div>
             <div class="form-grid cols">
-              <label>Title<input id="meta-title" /></label>
               <label>Author<input id="meta-author" /></label>
               <label>Subject<input id="meta-subject" /></label>
               <label

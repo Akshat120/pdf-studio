@@ -21,7 +21,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF; drag image cards to order the pages                                        |
 | **Compress images**   | Shrink HEIC/HEIF, JPEG, PNG, WebP, AVIF, GIF and BMP images; save as JPEG, WebP or PNG, resize, compare, download as .zip        |
 | **Resize photo**      | Exact size in px / mm / cm / in, or passport, visa & social presets; drag-to-crop with face guide, max file size (KB), print DPI |
-| **Info & metadata**   | Inspect page count, sizes and dates; edit title, author, subject, keywords, creator, producer                                    |
+| **Title & info**      | Change the title shown in tabs and title bars (kept in sync with XMP), optionally as the file name; edit other properties        |
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
 

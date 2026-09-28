@@ -3974,6 +3974,72 @@
     'Producer',
   ];
 
+  // Many PDFs also keep their title in an XMP metadata stream, which readers
+  // such as Acrobat prefer over the document info dictionary. Read it (for
+  // PDFs whose only title is there) and keep it in step when saving.
+  function readXmp(doc) {
+    const ref = doc.catalog.get(PDFLib.PDFName.of('Metadata'));
+    const stream = ref && doc.context.lookup(ref);
+    if (!(stream instanceof PDFLib.PDFRawStream)) return null;
+    try {
+      const bytes = stream.dict.get(PDFLib.PDFName.of('Filter'))
+        ? PDFLib.decodePDFRawStream(stream).decode()
+        : stream.contents;
+      return { ref, xml: new TextDecoder().decode(bytes) };
+    } catch (_) {
+      return { ref, xml: null }; // an encoding pdf-lib can't decode
+    }
+  }
+
+  const DC_TITLE = /<dc:title\b[^>]*?(?:\/>|>[\s\S]*?<\/dc:title>)/;
+
+  function xmpTitle(xml) {
+    const m = xml && xml.match(DC_TITLE);
+    const li = m && m[0].match(/<rdf:li\b[^>]*>([\s\S]*?)<\/rdf:li>/);
+    if (!li) return '';
+    const tmp = document.createElement('textarea');
+    tmp.innerHTML = li[1]; // decodes &amp; etc. without running anything
+    return tmp.value.trim();
+  }
+
+  function setXmpTitle(doc, title) {
+    const xmp = readXmp(doc);
+    if (!xmp) return;
+    if (xmp.xml == null) {
+      // Can't update what we can't read: drop it so the new title wins.
+      doc.catalog.delete(PDFLib.PDFName.of('Metadata'));
+      return;
+    }
+    if (!DC_TITLE.test(xmp.xml)) return; // no XMP title to contradict ours
+    const esc = title
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const xml = xmp.xml.replace(
+      DC_TITLE,
+      title
+        ? `<dc:title><rdf:Alt><rdf:li xml:lang="x-default">${esc}</rdf:li></rdf:Alt></dc:title>`
+        : '',
+    );
+    doc.context.assign(
+      xmp.ref,
+      doc.context.stream(new TextEncoder().encode(xml), {
+        Type: 'Metadata',
+        Subtype: 'XML',
+      }),
+    );
+  }
+
+  /** A title turned into a safe file name ("Report: Q3/2026" → "Report- Q3-2026.pdf"). */
+  const titleFileName = (title) =>
+    `${
+      title
+        .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s.-]+|[\s.-]+$/g, '')
+        .slice(0, 120) || 'document'
+    }.pdf`;
+
   setupDrop($('#meta-drop'), async ([file]) => {
     const bytes = await readFile(file);
     const doc = await loadPdf(bytes);
@@ -4018,14 +4084,27 @@
     META_FIELDS.forEach((f) => {
       $(`#meta-${f.toLowerCase()}`).value = doc[`get${f}`]() || '';
     });
+    if (!$('#meta-title').value) {
+      $('#meta-title').value = xmpTitle(readXmp(doc)?.xml);
+    }
     $('#meta-work').hidden = false;
+    $('#meta-title').focus();
   });
 
+  $('#meta-title').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('#meta-run').click();
+  });
   $('#meta-run').addEventListener('click', (e) =>
     run(e.currentTarget, async () => {
       const doc = await loadPdf(meta.bytes);
       const v = (f) => $(`#meta-${f}`).value.trim();
-      doc.setTitle(v('title'));
+      const title = v('title');
+      doc.setTitle(title);
+      setXmpTitle(doc, title);
+      // Readers show the file name unless the PDF asks for its title instead.
+      doc.catalog
+        .getOrCreateViewerPreferences()
+        .setDisplayDocTitle($('#meta-show-title').checked && !!title);
       doc.setAuthor(v('author'));
       doc.setSubject(v('subject'));
       doc.setKeywords(
@@ -4037,7 +4116,11 @@
       doc.setCreator(v('creator'));
       doc.setProducer(v('producer'));
       doc.setModificationDate(new Date());
-      await showResult(await doc.save(), meta.name);
+      const name =
+        $('#meta-title-name').checked && title
+          ? titleFileName(title)
+          : meta.name;
+      await showResult(await doc.save(), name, title && `title “${title}”`);
     }),
   );
 })();

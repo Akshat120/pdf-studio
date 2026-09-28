@@ -1725,3 +1725,17 @@ body.busy * {
     line-height: 24px;
   }
 }
+
+/* ---------- title & info ---------- */
+.meta-title {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #f7f9fb;
+  border: 1px solid #d4d9df;
+  border-radius: 5px;
+}
+.meta-title input[type='text'],
+.meta-title #meta-title {
+  font-size: 15px;
+  font-weight: bold;
+}
