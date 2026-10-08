@@ -30,6 +30,16 @@
   }
   $$('input, textarea').forEach(noAutofill);
 
+  // Password forms. A browser treats all fields that aren't in a <form> as one
+  // big form. With the Lock PDF passwords in it, that form looks like a sign-up
+  // page, and Brave then offers "New Email Alias" on whichever text or number
+  // field it takes for the username. The password fields therefore belong to
+  // small forms of their own (via their form="…" attribute), which leaves the
+  // rest of the page with no passwords in it. Nothing is ever submitted.
+  $$('#unlock-form, #lock-form').forEach((form) =>
+    form.addEventListener('submit', (e) => e.preventDefault()),
+  );
+
   function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
