@@ -1716,6 +1716,90 @@ body.busy * {
   }
 }
 
+/* ---------- crop ---------- */
+.cr-stage {
+  touch-action: none; /* dragging sets the crop area instead of scrolling */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cr-stage.scroll-mode {
+  touch-action: auto;
+  cursor: default;
+}
+/* Dims everything outside the crop area. */
+.cr-shade {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cr-hole {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+.cr-box {
+  position: absolute;
+  outline: 2px dashed #d0301f;
+  outline-offset: -1px;
+}
+.cr-box.set {
+  cursor: move;
+}
+.cr-box:focus-visible {
+  outline: 2px solid rgba(82, 168, 236, 0.9);
+}
+.cr-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px;
+  background: #fff;
+  border: 1px solid #d0301f;
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.cr-handle[data-h*='n'] {
+  top: 0;
+}
+.cr-handle[data-h*='s'] {
+  top: 100%;
+}
+.cr-handle[data-h*='w'] {
+  left: 0;
+}
+.cr-handle[data-h*='e'] {
+  left: 100%;
+}
+.cr-handle[data-h='n'],
+.cr-handle[data-h='s'] {
+  left: 50%;
+  cursor: ns-resize;
+}
+.cr-handle[data-h='w'],
+.cr-handle[data-h='e'] {
+  top: 50%;
+  cursor: ew-resize;
+}
+.cr-handle[data-h='nw'],
+.cr-handle[data-h='se'] {
+  cursor: nwse-resize;
+}
+.cr-handle[data-h='ne'],
+.cr-handle[data-h='sw'] {
+  cursor: nesw-resize;
+}
+.cr-stage.scroll-mode .cr-box,
+.cr-stage.scroll-mode .cr-handle {
+  cursor: default;
+}
+@media (max-width: 800px) {
+  .cr-handle {
+    width: 22px; /* finger-sized */
+    height: 22px;
+    margin: -11px;
+  }
+}
+
 /* ---------- title & info ---------- */
 .meta-title {
   margin-top: 16px;

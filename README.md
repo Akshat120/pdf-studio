@@ -11,6 +11,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order, rotate a file to turn all its pages      |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                            |
+| **Crop pages**        | Trim margins or keep part of a page: drag a crop box per page, or use the same crop on every page                                |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                           |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
@@ -121,6 +122,8 @@ These come from pdf-lib:
 - Redacted pages become images, so their remaining text can't be selected or
   searched, and the output drops bookmarks, form fields and document info.
   Scanned pages have no text for _Find text_ — mark them by hand.
+- Cropping hides what is outside the crop area rather than deleting it, so the
+  hidden content is still in the file. Use _Redact PDF_ to remove content.
 - No text extraction or conversion to images.
 
 ## Browser support

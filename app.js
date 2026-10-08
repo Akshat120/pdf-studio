@@ -2785,6 +2785,357 @@
     if (rdFitWidth() !== rd.width) renderRd();
   });
 
+  // -------------------------------------------------------------------- crop
+
+  // Each page's crop area is kept as fractions of the page as displayed
+  // ({l, t, r, b}, 0–1 from its top-left corner), so it is independent of zoom
+  // and can be reused on pages of another size. Pages without an entry are
+  // left alone. On save the area becomes the page's MediaBox and CropBox.
+  const cr = {
+    bytes: null,
+    name: '',
+    page: 0,
+    count: 0,
+    zoom: 1,
+    width: 0,
+    viewport: null,
+    token: 0,
+    crops: new Map(),
+  };
+  const CR_FULL = { l: 0, t: 0, r: 1, b: 1 };
+  const CR_MIN = 0.02; // smallest crop, as a fraction of the page
+  const crStage = $('#cr-stage');
+  const crBoxEl = $('#cr-box');
+  ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach((h) =>
+    crBoxEl.append(el('span', { class: 'cr-handle', 'data-h': h })),
+  );
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const crGet = (page = cr.page) => cr.crops.get(page) || CR_FULL;
+  const crIsFull = (c) =>
+    c.l < 0.001 && c.t < 0.001 && c.r > 0.999 && c.b > 0.999;
+
+  function crFitWidth() {
+    const box = $('#cr-scroll');
+    const cs = getComputedStyle(box);
+    return Math.floor(
+      box.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight) -
+        2,
+    );
+  }
+
+  setupDrop($('#cr-drop'), async ([file]) => {
+    if (!pdfjs) {
+      throw new Error(
+        'Cropping needs page previews, which could not load (are you offline?)',
+      );
+    }
+    const bytes = await readFile(file);
+    const doc = await loadPdf(bytes);
+    Object.assign(cr, {
+      bytes,
+      name: file.name,
+      page: 0,
+      count: doc.getPageCount(),
+      crops: new Map(),
+    });
+    unsaved = false;
+    const select = $('#cr-page');
+    select.innerHTML = '';
+    for (let i = 0; i < cr.count; i++) {
+      select.append(el('option', { value: i }, i + 1));
+    }
+    $('#cr-count').textContent = `of ${cr.count}`;
+    $('#cr-work').hidden = false;
+    await renderCr();
+  });
+
+  async function renderCr() {
+    const token = ++cr.token;
+    $('#cr-page').value = cr.page;
+    $('#cr-prev').disabled = cr.page === 0;
+    $('#cr-next').disabled = cr.page >= cr.count - 1;
+    const fitWidth = crFitWidth();
+    if (fitWidth <= 0) return; // tool is hidden; it re-renders when shown
+    $('#cr-zoom-label').textContent =
+      cr.zoom === 1 ? 'Fit width' : `${Math.round(cr.zoom * 100)}%`;
+    $('#cr-zoom-out').disabled = cr.zoom <= ZOOM_LEVELS[0];
+    $('#cr-zoom-in').disabled = cr.zoom >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
+    const pdf = await openForView(cr.bytes);
+    const canvas = el('canvas');
+    const viewport = await renderPage(pdf, cr.page + 1, canvas, {
+      width: Math.round(fitWidth * cr.zoom),
+    });
+    pdf.destroy();
+    if (token !== cr.token) return;
+    $('canvas', crStage)?.remove();
+    crStage.prepend(canvas);
+    cr.viewport = viewport;
+    cr.width = fitWidth;
+    drawCr();
+  }
+
+  function drawCr() {
+    const c = crGet();
+    crBoxEl.hidden = !cr.viewport;
+    crBoxEl.classList.toggle('set', !crIsFull(c));
+    for (const node of [crBoxEl, $('#cr-hole')]) {
+      Object.assign(node.style, {
+        left: `${c.l * 100}%`,
+        top: `${c.t * 100}%`,
+        width: `${(c.r - c.l) * 100}%`,
+        height: `${(c.b - c.t) * 100}%`,
+      });
+    }
+    if (cr.viewport) {
+      const mm = (css) => Math.round((css / cr.viewport.scale / 72) * 25.4);
+      $('#cr-size').textContent = `${mm(
+        (c.r - c.l) * cr.viewport.width,
+      )} × ${mm((c.b - c.t) * cr.viewport.height)} mm${
+        crIsFull(c) ? ' (whole page)' : ''
+      }`;
+    }
+    const n = cr.crops.size;
+    $('#cr-summary').textContent = n
+      ? `Crop set on ${n} of ${plural(cr.count, 'page')}.`
+      : 'No pages cropped yet.';
+    $('#cr-reset').disabled = !cr.crops.has(cr.page);
+    $('#cr-reset-all').disabled = !n;
+    $('#cr-all').disabled = cr.count < 2 || (crIsFull(c) && !n);
+    $('#cr-run').disabled = !n;
+  }
+
+  function crSet(box) {
+    if (crIsFull(box)) cr.crops.delete(cr.page);
+    else cr.crops.set(cr.page, box);
+    unsaved = cr.crops.size > 0;
+    drawCr();
+  }
+
+  // Drag on the page to draw a new area, inside the box to move it, or a
+  // handle to resize it. In "Scroll" mode touches scroll the page instead.
+  let crDrag = null;
+  const crPoint = (e) => {
+    const r = $('canvas', crStage).getBoundingClientRect();
+    return [
+      clamp((e.clientX - r.left) / r.width, 0, 1),
+      clamp((e.clientY - r.top) / r.height, 0, 1),
+      r,
+    ];
+  };
+  crStage.addEventListener('pointerdown', (e) => {
+    if (!cr.viewport || !$('canvas', crStage) || e.button !== 0) return;
+    if (crStage.classList.contains('scroll-mode')) return;
+    e.preventDefault();
+    try {
+      crStage.setPointerCapture(e.pointerId);
+    } catch {} // keeps dragging if the pointer leaves the page
+    const orig = crGet();
+    const handle = e.target.closest('.cr-handle');
+    const inside = e.target.closest('.cr-box') && !crIsFull(orig);
+    const [x, y] = crPoint(e);
+    crDrag = {
+      mode: handle ? handle.dataset.h : inside ? 'move' : 'new',
+      x,
+      y,
+      orig,
+      had: cr.crops.has(cr.page),
+    };
+  });
+  crStage.addEventListener('pointermove', (e) => {
+    if (!crDrag) return;
+    const [x, y, r] = crPoint(e);
+    const { mode, orig } = crDrag;
+    let box;
+    if (mode === 'new') {
+      // Ignore the first few pixels so a tap doesn't wipe the current area.
+      if (
+        !crDrag.moved &&
+        Math.abs(x - crDrag.x) * r.width < 4 &&
+        Math.abs(y - crDrag.y) * r.height < 4
+      ) {
+        return;
+      }
+      box = {
+        l: Math.min(x, crDrag.x),
+        t: Math.min(y, crDrag.y),
+        r: Math.max(x, crDrag.x),
+        b: Math.max(y, crDrag.y),
+      };
+      // Too thin to be a page yet: grow it away from the starting point.
+      if (box.r - box.l < CR_MIN) {
+        if (x < crDrag.x) box.l = Math.max(0, box.r - CR_MIN);
+        box.r = Math.min(1, box.l + CR_MIN);
+        box.l = box.r - CR_MIN;
+      }
+      if (box.b - box.t < CR_MIN) {
+        if (y < crDrag.y) box.t = Math.max(0, box.b - CR_MIN);
+        box.b = Math.min(1, box.t + CR_MIN);
+        box.t = box.b - CR_MIN;
+      }
+    } else if (mode === 'move') {
+      const dx = clamp(x - crDrag.x, -orig.l, 1 - orig.r);
+      const dy = clamp(y - crDrag.y, -orig.t, 1 - orig.b);
+      box = {
+        l: orig.l + dx,
+        t: orig.t + dy,
+        r: orig.r + dx,
+        b: orig.b + dy,
+      };
+    } else {
+      box = { ...orig };
+      if (mode.includes('w')) box.l = Math.min(x, orig.r - CR_MIN);
+      if (mode.includes('e')) box.r = Math.max(x, orig.l + CR_MIN);
+      if (mode.includes('n')) box.t = Math.min(y, orig.b - CR_MIN);
+      if (mode.includes('s')) box.b = Math.max(y, orig.t + CR_MIN);
+    }
+    crDrag.moved = true;
+    crSet(box);
+  });
+  const crEnd = (e) => {
+    if (!crDrag) return;
+    const { orig, had, moved } = crDrag;
+    crDrag = null;
+    if (e.type !== 'pointercancel' || !moved) return;
+    // An interrupted drag puts the area back as it was.
+    if (had) crSet(orig);
+    else crSet(CR_FULL);
+  };
+  crStage.addEventListener('pointerup', crEnd);
+  crStage.addEventListener('pointercancel', crEnd);
+
+  crBoxEl.addEventListener('keydown', (e) => {
+    const d = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const c = { ...crGet() };
+    const step = 0.01;
+    if (e.shiftKey) {
+      // Resize from the bottom-right corner.
+      c.r = clamp(c.r + d[0] * step, c.l + CR_MIN, 1);
+      c.b = clamp(c.b + d[1] * step, c.t + CR_MIN, 1);
+    } else {
+      const dx = clamp(d[0] * step, -c.l, 1 - c.r);
+      const dy = clamp(d[1] * step, -c.t, 1 - c.b);
+      c.l += dx;
+      c.r += dx;
+      c.t += dy;
+      c.b += dy;
+    }
+    crSet(c);
+  });
+
+  $$('#tool-crop [data-crmode]').forEach((b) =>
+    b.addEventListener('click', () => {
+      $$('#tool-crop [data-crmode]').forEach((x) => {
+        x.classList.toggle('active', x === b);
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      crStage.classList.toggle('scroll-mode', b.dataset.crmode === 'scroll');
+    }),
+  );
+
+  const crGo = (page) => {
+    cr.page = clamp(page, 0, cr.count - 1);
+    renderCr();
+  };
+  $('#cr-prev').addEventListener('click', () => crGo(cr.page - 1));
+  $('#cr-next').addEventListener('click', () => crGo(cr.page + 1));
+  $('#cr-page').addEventListener('change', (e) => crGo(+e.target.value));
+  $('#cr-zoom-in').addEventListener('click', () => {
+    const next = ZOOM_LEVELS.find((z) => z > cr.zoom);
+    if (next) (cr.zoom = next), renderCr();
+  });
+  $('#cr-zoom-out').addEventListener('click', () => {
+    const prev = [...ZOOM_LEVELS].reverse().find((z) => z < cr.zoom);
+    if (prev) (cr.zoom = prev), renderCr();
+  });
+
+  $('#cr-all').addEventListener('click', () => {
+    const c = crGet();
+    cr.crops = new Map();
+    if (!crIsFull(c)) {
+      for (let i = 0; i < cr.count; i++) cr.crops.set(i, { ...c });
+    }
+    unsaved = cr.crops.size > 0;
+    drawCr();
+    toast(
+      crIsFull(c)
+        ? 'Crop removed from all pages'
+        : `Crop applied to all ${plural(cr.count, 'page')}`,
+      'ok',
+    );
+  });
+  $('#cr-reset').addEventListener('click', () => crSet(CR_FULL));
+  $('#cr-reset-all').addEventListener('click', () => {
+    cr.crops = new Map();
+    unsaved = false;
+    drawCr();
+  });
+
+  $('#cr-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const doc = await loadPdf(cr.bytes);
+      // pdf.js maps the on-screen area back to PDF units; it already accounts
+      // for page rotation and for pages whose origin isn't at the corner.
+      const pdf = await openForView(cr.bytes);
+      try {
+        for (const [i, c] of cr.crops) {
+          const vp = (await pdf.getPage(i + 1)).getViewport({ scale: 1 });
+          const [x1, y1] = vp.convertToPdfPoint(
+            c.l * vp.width,
+            c.t * vp.height,
+          );
+          const [x2, y2] = vp.convertToPdfPoint(
+            c.r * vp.width,
+            c.b * vp.height,
+          );
+          const box = [
+            Math.min(x1, x2),
+            Math.min(y1, y2),
+            Math.abs(x2 - x1),
+            Math.abs(y2 - y1),
+          ];
+          const page = doc.getPage(i);
+          page.setMediaBox(...box);
+          page.setCropBox(...box);
+          // Keep the optional boxes inside the new page, if the file has them.
+          if (page.node.BleedBox()) page.setBleedBox(...box);
+          if (page.node.TrimBox()) page.setTrimBox(...box);
+          if (page.node.ArtBox()) page.setArtBox(...box);
+        }
+      } finally {
+        pdf.destroy();
+      }
+      const bytes = await doc.save();
+      unsaved = true; // until the result is downloaded
+      await showResult(
+        bytes,
+        `${baseName(cr.name)}-cropped.pdf`,
+        `${plural(cr.crops.size, 'page')} cropped`,
+      );
+    }),
+  );
+
+  window.addEventListener('resize', () => {
+    clearTimeout(cr.resizeTimer);
+    cr.resizeTimer = setTimeout(() => {
+      if (!cr.bytes || $('#tool-crop').hidden) return;
+      const width = crFitWidth();
+      if (width > 0 && width !== cr.width) renderCr();
+    }, 200);
+  });
+  document.addEventListener('toolchange', (e) => {
+    if (e.detail !== 'crop' || !cr.bytes) return;
+    if (crFitWidth() !== cr.width) renderCr();
+  });
+
   // ---------------------------------------------------------------- compress
 
   const {
