@@ -25,6 +25,11 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
 
+Rotation is available throughout: per page in _Merge & organize_, _Crop
+pages_, _Redact PDF_ and _Add text & images_ (↺ / ↻ next to the page number);
+per image in _Images to PDF_, _Compress images_ and _Resize photo_; and for
+every page at once on any finished PDF, from the result panel.
+
 With several PDFs in _Merge & organize_, **Stack** on a file's chip collapses
 its pages into one card, so the whole file can be moved, rotated or removed in
 one go; **Unstack** spreads the pages out again.
