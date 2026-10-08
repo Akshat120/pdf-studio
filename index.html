@@ -102,6 +102,10 @@
             <button type="button" data-tool="organize">
               <span class="ico" aria-hidden="true">▦</span>Organize pages
             </button>
+            <button type="button" data-tool="crop">
+              <span class="ico" aria-hidden="true">&#x2702;&#xFE0E;</span>Crop
+              pages
+            </button>
             <button type="button" data-tool="compress">
               <span class="ico" aria-hidden="true">⇲</span>Compress PDF
             </button>
@@ -728,6 +732,130 @@
             <button type="button" class="primary" id="lock-run" disabled>
               Lock PDF
             </button>
+          </div>
+        </section>
+
+        <!-- Crop -->
+        <section class="tool card" id="tool-crop" aria-labelledby="h-crop" hidden>
+          <h1 id="h-crop">Crop pages</h1>
+          <p class="sub">
+            Trim the margins or keep just one part of a page. Set a crop area on
+            each page, or use the same one for every page.
+          </p>
+          <label class="drop" id="cr-drop">
+            <input type="file" accept=".pdf,application/pdf" hidden />
+            <strong>Choose a PDF</strong> or drop it here
+          </label>
+          <div class="edit-grid" id="cr-work" hidden>
+            <div class="stage-col">
+              <div class="pagenav">
+                <button
+                  type="button"
+                  id="cr-prev"
+                  class="icon"
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <label class="inline" for="cr-page">Page</label>
+                <select id="cr-page"></select>
+                <span class="muted" id="cr-count"></span>
+                <button
+                  type="button"
+                  id="cr-next"
+                  class="icon"
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+                <span class="spacer"></span>
+                <span class="zoom" role="group" aria-label="Zoom">
+                  <button
+                    type="button"
+                    id="cr-zoom-out"
+                    class="icon"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    −
+                  </button>
+                  <output id="cr-zoom-label" aria-live="polite"
+                    >Fit width</output
+                  >
+                  <button
+                    type="button"
+                    id="cr-zoom-in"
+                    class="icon"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                </span>
+              </div>
+              <div class="stage-scroll" id="cr-scroll">
+                <div
+                  class="stage cr-stage"
+                  id="cr-stage"
+                  aria-label="Page preview. Drag to choose the area to keep."
+                >
+                  <div class="cr-shade" aria-hidden="true">
+                    <div class="cr-hole" id="cr-hole"></div>
+                  </div>
+                  <div
+                    class="cr-box"
+                    id="cr-box"
+                    tabindex="0"
+                    role="group"
+                    aria-label="Crop area. Arrow keys move it, Shift + arrow keys resize it."
+                    hidden
+                  ></div>
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="tabs" role="group" aria-label="Touch mode">
+                <button
+                  type="button"
+                  data-crmode="crop"
+                  class="active"
+                  aria-pressed="true"
+                >
+                  &#x2702;&#xFE0E; Crop
+                </button>
+                <button type="button" data-crmode="scroll" aria-pressed="false">
+                  ✋ Scroll
+                </button>
+              </div>
+              <p class="hint">
+                Drag across the page to choose what to keep. Drag the box to
+                move it, or its handles to resize it.
+              </p>
+              <div class="pos" aria-live="polite">
+                Crop area: <span id="cr-size">&ndash;</span>
+              </div>
+              <button type="button" class="block" id="cr-all">
+                Use this crop on all pages
+              </button>
+              <div class="two">
+                <button type="button" id="cr-reset" disabled>Reset page</button>
+                <button type="button" id="cr-reset-all" disabled>
+                  Reset all
+                </button>
+              </div>
+              <div class="pos" aria-live="polite" id="cr-summary">
+                No pages cropped yet.
+              </div>
+              <button type="button" class="primary block" id="cr-run" disabled>
+                Crop &amp; save
+              </button>
+              <p class="hint">
+                Cropping hides what is outside the box; it stays in the file. To
+                remove something for good, use Redact PDF.
+              </p>
+            </div>
           </div>
         </section>
 
