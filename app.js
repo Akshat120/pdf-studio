@@ -27,6 +27,44 @@
     return node;
   }
 
+  // -------------------------------------------------------------------- theme
+
+  // The <head> script has already set <html data-theme>. The header button
+  // flips it and remembers the choice; until one is made, the page follows
+  // the system setting.
+  const THEME_KEY = 'pdfstudio-theme';
+  const systemDark = matchMedia('(prefers-color-scheme: dark)');
+  const savedTheme = () => {
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      return t === 'light' || t === 'dark' ? t : null;
+    } catch {
+      return null; // storage blocked (e.g. private mode)
+    }
+  };
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const dark = theme === 'dark';
+    const label = `Switch to ${dark ? 'light' : 'dark'} theme`;
+    const toggle = $('#theme-toggle');
+    toggle.textContent = dark ? '☀' : '☾';
+    toggle.title = label;
+    toggle.setAttribute('aria-label', label);
+    $('meta[name="theme-color"]').content = dark ? '#1a3c70' : '#2a5eab';
+  }
+  applyTheme(document.documentElement.dataset.theme || 'light');
+  $('#theme-toggle').addEventListener('click', () => {
+    const next =
+      document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {} // still switches for this visit
+    applyTheme(next);
+  });
+  systemDark.addEventListener('change', (e) => {
+    if (!savedTheme()) applyTheme(e.matches ? 'dark' : 'light');
+  });
+
   if (!window.PDFLib) {
     const fatal = $('#fatal');
     fatal.hidden = false;

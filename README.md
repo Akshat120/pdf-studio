@@ -130,6 +130,10 @@ These come from pdf-lib:
 Current versions of Chrome, Edge, Firefox and Safari. The retro, circa-2011
 look is purely cosmetic — the code is modern JavaScript.
 
+There is a light and a dark theme. The page follows your system setting until
+you use the ☾ / ☀ button in the header; after that it remembers your choice in
+this browser.
+
 ## Contributing
 
 Format changes with the included Prettier config before committing:
