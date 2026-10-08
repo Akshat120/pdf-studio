@@ -687,6 +687,27 @@ label.check input {
 .orgfiles + .toolbar {
   margin-top: 10px;
 }
+.orgfile-all {
+  display: flex;
+  align-items: center;
+}
+.orgfile-all button {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+.orgfile button[aria-pressed='true'] {
+  color: #fff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+  background: linear-gradient(to bottom, #6fa1e4, #3a70c0);
+  border-color: #2f5f9f;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+/* A stacked file: its first page with a little pile of paper behind it. */
+.pcard.stack .pframe canvas {
+  max-width: calc(100% - 14px);
+  max-height: calc(100% - 14px);
+  box-shadow: 3px 3px 0 #fff, 4px 4px 0 #bbb, 7px 7px 0 #fff, 8px 8px 0 #bbb;
+}
 /* Coloured label tying a page to its file. */
 .ftag {
   display: inline-block;
@@ -2128,17 +2149,9 @@ body.busy * {
 :where([data-theme='dark']) .rs-result img {
   border-color: #555;
 }
-:where([data-theme='dark']) .file-card.multi .pframe img {
-  box-shadow: 3px 3px 0 #2c323b, 4px 4px 0 #6b7480, 7px 7px 0 #2c323b,
-    8px 8px 0 #6b7480;
-}
-:where([data-theme='dark']) .file-card .thumb-pending,
-:where([data-theme='dark']) .file-card .thumb-none {
-  background: #3a414b;
-}
-:where([data-theme='dark']) .file-card .thumb-none {
-  color: #8e98a4;
-  border-color: #4a525e;
+:where([data-theme='dark']) .pcard.stack .pframe canvas {
+  box-shadow: 3px 3px 0 #d6dbe2, 4px 4px 0 #555, 7px 7px 0 #d6dbe2,
+    8px 8px 0 #555;
 }
 :where([data-theme='dark']) .orgfile {
   background: #2c323b;

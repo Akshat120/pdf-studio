@@ -876,7 +876,7 @@
   // Each entry of `pages` points at a page of one of `files`, so pages from
   // different files can be mixed in any order.
   const org = {
-    files: [], // [{ name, bytes, count, thumbs, tag, colour }]
+    files: [], // [{ name, bytes, count, thumbs, tag, colour, stacked }]
     pages: [], // [{ file, src, rot, sel }]
     dragFrom: -1,
     focus: -1,
@@ -951,6 +951,7 @@
     file.thumbs.map((_, i) => ({ file, src: i, rot: 0, sel: false }));
 
   function resetOrg() {
+    org.files.forEach((f) => (f.stacked = false));
     org.pages = org.files.flatMap(filePages);
     org.focus = -1;
     drawOrg();
@@ -963,10 +964,46 @@
     drawOrg();
   }
 
-  /** The pages that move together with page `i`: every selected page if it is
-   *  one of them, otherwise just itself. */
-  const movingWith = (i) =>
-    org.pages[i].sel ? org.pages.filter((p) => p.sel) : [org.pages[i]];
+  /** Stacks a file: its pages are gathered where the first of them is, in
+   *  their current order, and shown as one card that moves as a unit. */
+  function setStacked(file, on) {
+    file.stacked = on;
+    if (on) {
+      const mine = org.pages.filter((p) => p.file === file);
+      // A stack is selected as a whole or not at all.
+      const allSel = mine.every((p) => p.sel);
+      mine.forEach((p) => (p.sel = allSel));
+      const at = org.pages.indexOf(mine[0]);
+      const rest = org.pages.filter((p) => p.file !== file);
+      rest.splice(at, 0, ...mine);
+      org.pages = rest;
+    }
+    org.focus = -1;
+    drawOrg();
+  }
+
+  /** What the grid shows, in order: one item per page, or one item for all the
+   *  pages of a stacked file. `start` is the item's first page number - 1. */
+  function orgItems() {
+    const items = [];
+    const stacks = new Map();
+    org.pages.forEach((p, i) => {
+      if (!p.file.stacked) return items.push({ pages: [p], start: i });
+      let item = stacks.get(p.file);
+      if (!item) {
+        item = { stack: p.file, pages: [], start: i };
+        stacks.set(p.file, item);
+        items.push(item);
+      }
+      item.pages.push(p);
+    });
+    return items;
+  }
+
+  /** The pages that move together with an item: every selected page if the
+   *  item is selected, otherwise just its own. */
+  const movingWith = (item) =>
+    item.pages[0].sel ? org.pages.filter((p) => p.sel) : item.pages;
 
   /** Takes `moving` out of the document and puts them back, in order, so that
    *  `at` of the remaining pages come before them. */
@@ -974,32 +1011,44 @@
     const rest = org.pages.filter((p) => !moving.includes(p));
     rest.splice(Math.max(0, Math.min(rest.length, at)), 0, ...moving);
     org.pages = rest;
-    org.focus = org.pages.indexOf(focus);
+    org.focus = orgItems().findIndex((it) => it.pages.includes(focus));
     drawOrg();
   }
 
-  // Dragging: dropping on a later page puts the pages after it, on an earlier
-  // page before it — the same as moving a single page always did.
-  function movePage(from, to) {
-    if (to < 0 || to >= org.pages.length || from === to) return;
-    const moving = movingWith(from);
-    const before = org.pages
+  // Dragging: dropping on a later card puts the pages after it, on an earlier
+  // card before it — the same as moving a single page always did.
+  function moveItem(from, to) {
+    const items = orgItems();
+    if (to < 0 || to >= items.length || from === to) return;
+    const moving = movingWith(items[from]);
+    const before = items
       .slice(0, to + (to > from ? 1 : 0))
+      .flatMap((it) => it.pages)
       .filter((p) => !moving.includes(p)).length;
-    placePages(moving, before, org.pages[from]);
+    placePages(moving, before, items[from].pages[0]);
   }
 
-  // Keyboard: one step left or right past the neighbouring page.
-  function stepPage(i, dir) {
-    const moving = movingWith(i);
-    const before = org.pages.slice(0, i).filter((p) => !moving.includes(p));
-    placePages(moving, before.length + dir, org.pages[i]);
+  // Keyboard: one step left or right past the neighbouring card.
+  function stepItem(i, dir) {
+    const items = orgItems();
+    const moving = movingWith(items[i]);
+    const still = (it) => !moving.includes(it.pages[0]);
+    const rest = items.filter(still);
+    const k = items.slice(0, i).filter(still).length + dir;
+    const before = rest
+      .slice(0, Math.max(0, k))
+      .reduce((n, it) => n + it.pages.length, 0);
+    placePages(moving, before, items[i].pages[0]);
   }
 
   function drawOrg() {
     const { files } = org;
     const many = files.length > 1;
     $('#org-work').hidden = !files.length;
+    // A stack needs pages, and is only useful with other files around.
+    for (const f of files) {
+      if (!many || !org.pages.some((p) => p.file === f)) f.stacked = false;
+    }
 
     // One chip per file, shown once there is more than one to tell apart.
     const chips = $('#org-files');
@@ -1041,33 +1090,93 @@
               },
               allSel ? 'Deselect' : 'Select pages',
             ),
+            el(
+              'button',
+              {
+                type: 'button',
+                title: f.stacked
+                  ? 'Show its pages one by one again'
+                  : 'Show its pages as one card that moves together',
+                'aria-label': `${f.stacked ? 'Unstack' : 'Stack'} the pages of ${
+                  f.name
+                }`,
+                'aria-pressed': String(!!f.stacked),
+                disabled: !mine.length,
+                onclick: () => setStacked(f, !f.stacked),
+              },
+              f.stacked ? 'Unstack' : 'Stack',
+            ),
             iconBtn('✕', `Remove ${f.name}`, () => removeFile(f)),
           ),
         );
       }
+      const stackable = files.filter((f) =>
+        org.pages.some((p) => p.file === f),
+      );
+      const allStacked =
+        stackable.length > 0 && stackable.every((f) => f.stacked);
+      chips.append(
+        el(
+          'li',
+          { class: 'orgfile-all' },
+          el(
+            'button',
+            {
+              type: 'button',
+              disabled: !stackable.length,
+              onclick: () => {
+                // Unstack first so each file gathers from a plain page list.
+                files.forEach((f) => (f.stacked = false));
+                if (!allStacked) stackable.forEach((f) => setStacked(f, true));
+                else drawOrg();
+              },
+            },
+            allStacked ? 'Unstack all' : 'Stack all',
+          ),
+        ),
+      );
     }
 
     const grid = $('#org-grid');
     grid.innerHTML = '';
-    org.pages.forEach((p, i) => {
-      const canvas = p.file.thumbs[p.src];
-      canvas.style.transform = `rotate(${p.rot}deg)`;
+    const pageNo = (p) => org.pages.indexOf(p) + 1;
+    orgItems().forEach((item, i) => {
+      const { stack } = item;
+      const first = item.pages[0];
+      const sel = first.sel;
+      const canvas = first.file.thumbs[first.src];
+      canvas.style.transform = `rotate(${first.rot}deg)`;
+      const last = item.start + item.pages.length;
+      // "3" for a page, "3–7" for a stack.
+      const num =
+        item.pages.length > 1 ? `${item.start + 1}–${last}` : item.start + 1;
+      const what = stack
+        ? `${stack.name}, ${plural(item.pages.length, 'page')} stacked`
+        : `Page ${num}`;
       const toggle = () => {
-        p.sel = !p.sel;
+        item.pages.forEach((p) => (p.sel = !sel));
         org.focus = i;
         drawOrg();
       };
-      const from = many ? ` (${p.file.name}, page ${p.src + 1})` : '';
+      const rotate = (by) => {
+        item.pages.forEach((p) => (p.rot += by));
+        org.focus = i;
+        drawOrg();
+      };
+      const from =
+        many && !stack ? ` (${first.file.name}, page ${first.src + 1})` : '';
       const frame = el(
         'div',
         {
           class: 'pframe',
           role: 'button',
           tabindex: '0',
-          'aria-pressed': String(p.sel),
-          'aria-label': `Page ${i + 1}${from}${p.sel ? ', selected' : ''}`,
-          title: many
-            ? `${p.file.name}, page ${p.src + 1} — click to select`
+          'aria-pressed': String(sel),
+          'aria-label': `${what}${from}${sel ? ', selected' : ''}`,
+          title: stack
+            ? `${stack.name}, pages ${num} — click to select`
+            : many
+            ? `${first.file.name}, page ${first.src + 1} — click to select`
             : 'Click to select',
           onclick: toggle,
         },
@@ -1082,60 +1191,58 @@
           (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
         ) {
           e.preventDefault();
-          stepPage(i, e.key === 'ArrowLeft' ? -1 : 1);
+          stepItem(i, e.key === 'ArrowLeft' ? -1 : 1);
         }
       });
-      // Where the page came from: its file and page there, or, with a single
-      // file, its old number if it has moved.
+      // Where the pages came from: the file (and page there), or, with a
+      // single file, the page's old number if it has moved.
       const origin = many
         ? el(
             'span',
             {
               class: 'ftag',
-              style: `background:${p.file.colour}`,
-              title: `${p.file.name}, page ${p.src + 1}`,
+              style: `background:${first.file.colour}`,
+              title: stack
+                ? `${stack.name}, ${plural(item.pages.length, 'page')}`
+                : `${first.file.name}, page ${first.src + 1}`,
             },
-            `${p.file.tag}·${p.src + 1}`,
+            stack
+              ? `${stack.tag} ×${item.pages.length}`
+              : `${first.file.tag}·${first.src + 1}`,
           )
-        : p.src !== i
-        ? el('span', { class: 'muted small' }, ` (was ${p.src + 1})`)
+        : first.src !== item.start
+        ? el('span', { class: 'muted small' }, ` (was ${first.src + 1})`)
         : '';
       const card = el(
         'div',
-        { class: `pcard${p.sel ? ' selected' : ''}` },
+        {
+          class: `pcard${sel ? ' selected' : ''}${stack ? ' stack' : ''}`,
+        },
         frame,
         el(
           'div',
           { class: 'pbar' },
-          el('span', { class: 'num' }, i + 1, many ? ' ' : '', origin),
-          iconBtn('⤢', `View page ${i + 1} full size`, () => {
-            // The viewer shows one file at a time: this page's file, with its
-            // pages in their current order.
-            const mine = org.pages.filter((q) => q.file === p.file);
-            openViewer(p.file.bytes, {
+          el('span', { class: 'num' }, num, many ? ' ' : '', origin),
+          iconBtn('⤢', `View ${what} full size`, () => {
+            // The viewer shows one file at a time: this file's pages, in
+            // their current order.
+            const mine = org.pages.filter((q) => q.file === first.file);
+            openViewer(first.file.bytes, {
               pages: mine.map((q) => ({ index: q.src, rot: q.rot })),
-              start: mine.indexOf(p),
-              title: p.file.name,
+              start: mine.indexOf(first),
+              title: first.file.name,
             });
           }),
-          iconBtn(
-            '↺',
-            `Rotate page ${i + 1} left`,
-            () => ((p.rot -= 90), drawOrg()),
-          ),
-          iconBtn(
-            '↻',
-            `Rotate page ${i + 1} right`,
-            () => ((p.rot += 90), drawOrg()),
-          ),
-          iconBtn(
-            '✕',
-            `Delete page ${i + 1}`,
-            () => (org.pages.splice(i, 1), drawOrg()),
-          ),
+          iconBtn('↺', `Rotate ${what} left`, () => rotate(-90)),
+          iconBtn('↻', `Rotate ${what} right`, () => rotate(90)),
+          iconBtn('✕', `Delete ${what}`, () => {
+            org.pages = org.pages.filter((p) => !item.pages.includes(p));
+            org.focus = -1;
+            drawOrg();
+          }),
         ),
       );
-      makeReorderable(card, i, org, movePage);
+      makeReorderable(card, i, org, moveItem);
       grid.append(card);
     });
     if (files.length && !org.pages.length) {

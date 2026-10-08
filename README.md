@@ -25,6 +25,10 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
 
+With several PDFs in _Merge & organize_, **Stack** on a file's chip collapses
+its pages into one card, so the whole file can be moved, rotated or removed in
+one go; **Unstack** spreads the pages out again.
+
 Click any preview — an image in Images to PDF, the ⤢ button on a page in Merge
 & organize, or a page in the result panel — to open it full size in a viewer
 (← / → to step through, Esc to close).
