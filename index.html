@@ -97,10 +97,8 @@
           </h3>
           <nav id="nav" aria-labelledby="tools-heading">
             <button type="button" data-tool="merge">
-              <span class="ico" aria-hidden="true">⧉</span>Merge PDFs
-            </button>
-            <button type="button" data-tool="organize">
-              <span class="ico" aria-hidden="true">▦</span>Organize pages
+              <span class="ico" aria-hidden="true">⧉</span>Merge &amp;
+              organize
             </button>
             <button type="button" data-tool="crop">
               <span class="ico" aria-hidden="true">&#x2702;&#xFE0E;</span>Crop
@@ -153,55 +151,24 @@
       <main id="main" tabindex="-1">
         <div class="alert" id="fatal" role="alert" hidden></div>
 
-        <!-- Merge -->
+        <!-- Merge & organize -->
         <section class="tool card" id="tool-merge" aria-labelledby="h-merge">
-          <h1 id="h-merge">Merge PDFs</h1>
+          <h1 id="h-merge">Merge &amp; organize</h1>
           <p class="sub">
-            Combine several PDFs into one file, in the order you choose. Rotate
-            a file with ↺ / ↻ to turn all of its pages.
+            Combine PDFs into one file, or tidy up a single PDF: reorder,
+            rotate, delete, or pull out just the pages you need.
           </p>
-          <label class="drop" id="merge-drop">
+          <label class="drop" id="org-drop">
             <input type="file" accept=".pdf,application/pdf" multiple hidden />
             <strong>Choose PDFs</strong> or drop them here
           </label>
-          <p class="hint grid-hint merge-hint" id="merge-hint" hidden>
-            Drag files to change the order &mdash; or focus one and press Shift
-            + ← / →. Files are merged left to right, top to bottom.
-          </p>
-          <div
-            class="pagegrid"
-            id="merge-grid"
-            aria-label="Files to merge, in order"
-            hidden
-          ></div>
-          <div class="actions">
-            <span class="muted" id="merge-summary"
-              >Add two or more PDFs to get started.</span
-            >
-            <button type="button" id="merge-clear" hidden>Clear all</button>
-            <button type="button" class="primary" id="merge-run" disabled>
-              Merge PDFs
-            </button>
-          </div>
-        </section>
-
-        <!-- Organize -->
-        <section
-          class="tool card"
-          id="tool-organize"
-          aria-labelledby="h-organize"
-          hidden
-        >
-          <h1 id="h-organize">Organize pages</h1>
-          <p class="sub">
-            Drag pages to reorder. Rotate, delete, or pull out just the pages
-            you need.
-          </p>
-          <label class="drop" id="org-drop">
-            <input type="file" accept=".pdf,application/pdf" hidden />
-            <strong>Choose a PDF</strong> or drop it here
-          </label>
           <div id="org-work" hidden>
+            <ul
+              class="orgfiles"
+              id="org-files"
+              aria-label="Files added"
+              hidden
+            ></ul>
             <div class="toolbar">
               <span class="muted" id="org-info"></span>
               <span class="spacer"></span>
@@ -209,11 +176,21 @@
               <button type="button" id="org-sel-none">Clear selection</button>
               <button type="button" id="org-rot-sel">Rotate ↻</button>
               <button type="button" id="org-del-sel">Delete selected</button>
-              <button type="button" id="org-reset">Reset</button>
+              <button
+                type="button"
+                id="org-reset"
+                title="Put every page back in its original order"
+              >
+                Reset
+              </button>
+              <button type="button" id="org-clear" title="Remove all files">
+                Clear all
+              </button>
             </div>
             <p class="hint grid-hint">
-              Click a page to select it. Drag to reorder &mdash; or focus a page
-              and press Shift + ← / →.
+              Add more PDFs above to merge them. Click a page to select it. Drag
+              to reorder &mdash; dragging a selected page moves all selected
+              pages &mdash; or focus a page and press Shift + ← / →.
             </p>
             <div class="pagegrid" id="org-grid" aria-label="Pages"></div>
             <div class="actions">
@@ -228,7 +205,7 @@
                 Extract selected
               </button>
               <button type="button" class="primary" id="org-save">
-                Save document
+                Save PDF
               </button>
             </div>
           </div>

@@ -581,7 +581,7 @@ label.check input {
   border-radius: 4px;
 }
 
-/* ---------- page grid (organize) ---------- */
+/* ---------- page grid (merge & organize) ---------- */
 .pagegrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -653,16 +653,58 @@ label.check input {
   font-size: 12px;
 }
 
-/* ---------- merge: file cards (share the organize grid styles) ---------- */
-#merge-hint,
+/* ---------- merge & organize: the files the pages come from ---------- */
+.orgfiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.orgfile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px 6px 4px 8px;
+  background: #fff;
+  border: 1px solid #d4d9df;
+  border-radius: 4px;
+}
+.orgfile .fname {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  font-weight: bold;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orgfile button {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+.orgfiles + .toolbar {
+  margin-top: 10px;
+}
+/* Coloured label tying a page to its file. */
+.ftag {
+  display: inline-block;
+  padding: 2px 5px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1.2;
+  color: #fff;
+  border-radius: 3px;
+}
+
+/* ---------- file cards (share the page grid styles) ---------- */
 #img-hint {
   margin: 14px 0 8px;
 }
-#merge-grid,
 #img-grid {
   margin-top: 14px;
 }
-.grid-hint + #merge-grid,
 .grid-hint + #img-grid {
   margin-top: 0;
 }
@@ -692,26 +734,6 @@ label.check input {
   border: 1px solid #ddd;
 }
 
-/* A little stack of paper behind files with more than one page. */
-.file-card.multi .pframe img {
-  box-shadow: 3px 3px 0 #fff, 4px 4px 0 #bbb, 7px 7px 0 #fff, 8px 8px 0 #bbb;
-}
-.file-card .thumb-pending,
-.file-card .thumb-none {
-  display: grid;
-  place-items: center;
-  width: 165px;
-  height: 220px;
-  background: #e9ecef;
-}
-.file-card .thumb-pending {
-  animation: pulse 1.2s ease-in-out infinite alternate;
-}
-.file-card .thumb-none {
-  color: #999;
-  font-weight: bold;
-  border: 1px solid #ccc;
-}
 .file-card .fcap {
   margin-top: 6px;
   overflow: hidden;

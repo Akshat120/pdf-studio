@@ -9,8 +9,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 | Tool                  | What it does                                                                                                                     |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order, rotate a file to turn all its pages      |
-| **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                            |
+| **Merge & organize**  | Combine PDFs and arrange their pages in one grid: reorder (drag or Shift + ←/→), rotate, delete, extract by selection or range   |
 | **Crop pages**        | Trim margins or keep part of a page: drag a crop box per page, or use the same crop on every page                                |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, re-save large photos at Recommended / Strong levels, or aim for a target such as 50% smaller     |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
@@ -26,8 +25,8 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
 
-Click any preview — a Merge card, an image in Images to PDF, the ⤢ button on an
-Organize page, or a page in the result panel — to open it full size in a viewer
+Click any preview — an image in Images to PDF, the ⤢ button on a page in Merge
+& organize, or a page in the result panel — to open it full size in a viewer
 (← / → to step through, Esc to close).
 
 ## Running locally
@@ -100,7 +99,7 @@ curl -L -o vendor/pdf-lib.min.js https://cdn.jsdelivr.net/npm/pdf-lib@<version>/
 ## Accessibility
 
 - Everything works with the keyboard: drop zones open the file picker with
-  Enter/Space; in _Organize pages_, Space selects a page and Shift + ←/→ moves
+  Enter/Space; in _Merge & organize_, Space selects a page and Shift + ←/→ moves
   it; in _Add text & images_, the arrow keys position content (Shift for bigger
   steps), Enter adds it and Ctrl/⌘ + Z undoes.
 - Status messages are announced to screen readers, and there's a "Skip to
