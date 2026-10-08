@@ -1834,3 +1834,415 @@ body.busy * {
   font-size: 15px;
   font-weight: bold;
 }
+
+/* ---------- theme switch (header) ---------- */
+.theme-toggle {
+  flex: none;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35);
+  background: linear-gradient(
+    to bottom,
+    #4a80cf 0%,
+    #2f63b1 50%,
+    #25579f 51%,
+    #1d4a8a 100%
+  );
+  border: 1px solid #163a70;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.theme-toggle:hover:not(:disabled),
+.theme-toggle:active:not(:disabled) {
+  background: linear-gradient(to bottom, #5a8fd6, #2a5eab);
+}
+/* Keep the switch clear of the corner ribbon. */
+@media (min-width: 801px) and (max-width: 1420px) {
+  .topbar-inner {
+    padding-right: 124px;
+  }
+}
+@media (max-width: 800px) {
+  .topbar-inner {
+    padding-right: 10px; /* no ribbon to clear on phones */
+  }
+  .theme-toggle {
+    margin-left: auto; /* the tagline is hidden here */
+  }
+  .menu-toggle {
+    flex: 0 1 auto; /* a long tool name shortens to make room for the switch */
+    min-width: 0;
+  }
+}
+
+/* ---------- dark theme ----------
+   The same glossy look on dark surfaces. Every rule is wrapped in :where() so
+   it weighs exactly as much as the light rule it replaces and the states
+   (hover, active, selected, primary…) keep working as they do above. PDF pages
+   and image previews stay white: they show what the document really looks
+   like. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:where([data-theme='dark']) body {
+  color: #d6dbe2;
+  background-color: #1b1f26;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.03) 0 2px,
+    transparent 2px 5px
+  );
+}
+:where([data-theme='dark']) a {
+  color: #6db3f2;
+}
+:where([data-theme='dark']) a:hover {
+  color: #9ccbf7;
+}
+:where([data-theme='dark']) .topbar {
+  background: linear-gradient(
+    to bottom,
+    #3b6cb0 0%,
+    #2a5596 50%,
+    #214984 51%,
+    #1a3c70 100%
+  );
+  border-bottom-color: #0f2547;
+}
+:where([data-theme='dark']) .box,
+:where([data-theme='dark']) .card {
+  background: #262b33;
+  border-color: #3d4551;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+:where([data-theme='dark']) .box h3,
+:where([data-theme='dark']) .card > h1 {
+  color: #e6eaef;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  background: linear-gradient(to bottom, #353c46, #2b313a);
+  border-bottom-color: #3d4551;
+}
+:where([data-theme='dark']) #nav button {
+  color: #8fbdf0;
+  background: #262b33;
+  border-top-color: #2b313a;
+  border-bottom-color: #333a44;
+}
+:where([data-theme='dark']) #nav button::after {
+  color: #5c6672;
+}
+:where([data-theme='dark']) #nav button:hover {
+  color: #b9d6f7;
+  background: linear-gradient(to bottom, #2f3743, #2a3340);
+}
+:where([data-theme='dark']) #nav button.active {
+  color: #fff;
+  background: linear-gradient(
+    to bottom,
+    #6fa1e4 0%,
+    #4a80cf 50%,
+    #3a70c0 51%,
+    #2f63b1 100%
+  );
+}
+:where([data-theme='dark']) .tip {
+  color: #e6d9a0;
+  background: linear-gradient(to bottom, #4a4424, #3f3a1c);
+  border-color: #6b6130;
+  box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.4);
+}
+:where([data-theme='dark']) .tip strong {
+  color: #f2dc7a;
+}
+:where([data-theme='dark']) .sub {
+  color: #a9b2bd;
+  background: #2a3038;
+  border-bottom-color: #353c46;
+}
+:where([data-theme='dark']) .muted,
+:where([data-theme='dark']) .hint {
+  color: #8e98a4;
+}
+
+/* buttons and form controls */
+:where([data-theme='dark']) button {
+  color: #dfe4ea;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(to bottom, #4a525e, #3a414b);
+  border-color: #565f6b;
+  border-bottom-color: #2a2f37;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+:where([data-theme='dark']) button:hover:not(:disabled) {
+  background: linear-gradient(to bottom, #566070, #434b57);
+}
+:where([data-theme='dark']) button:active:not(:disabled) {
+  background: #353c46;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+:where([data-theme='dark']) .tabs button.active {
+  background: linear-gradient(to bottom, #6fa1e4, #3a70c0);
+}
+:where([data-theme='dark']) input:not([type]),
+:where([data-theme='dark']) input[type='number'],
+:where([data-theme='dark']) input[type='text'],
+:where([data-theme='dark']) select,
+:where([data-theme='dark']) textarea {
+  color: #dfe4ea;
+  background: #1f242b;
+  border-color: #4a525e;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+:where([data-theme='dark']) select {
+  background: linear-gradient(to bottom, #2c323b, #252a32);
+}
+:where([data-theme='dark']) input:focus,
+:where([data-theme='dark']) select:focus,
+:where([data-theme='dark']) textarea:focus {
+  border-color: rgba(82, 168, 236, 0.8);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4),
+    0 0 8px rgba(82, 168, 236, 0.6);
+}
+:where([data-theme='dark']) button:focus-visible {
+  outline-color: #cfd6de;
+}
+:where([data-theme='dark']) input[type='color'] {
+  background: #1f242b;
+  border-color: #4a525e;
+}
+:where([data-theme='dark']) .form-grid.cols,
+:where([data-theme='dark']) .fields,
+:where([data-theme='dark']) .perms,
+:where([data-theme='dark']) .panel,
+:where([data-theme='dark']) .meta-title {
+  background: #2a3038;
+  border-color: #3d4551;
+}
+:where([data-theme='dark']) .panel {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+:where([data-theme='dark']) .form-grid label,
+:where([data-theme='dark']) .fields label,
+:where([data-theme='dark']) .perms legend,
+:where([data-theme='dark']) .lock-advanced label,
+:where([data-theme='dark']) .levels legend,
+:where([data-theme='dark']) .lv-target {
+  color: #c3cad3;
+}
+:where([data-theme='dark']) .actions {
+  background: #2a3038;
+  border-top-color: #3d4551;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+:where([data-theme='dark']) .toolbar,
+:where([data-theme='dark']) .pagenav {
+  background: linear-gradient(to bottom, #353c46, #2b313a);
+  border-color: #454d59;
+}
+:where([data-theme='dark']) .toolbar > .muted {
+  color: #a9b2bd;
+}
+
+/* drop zone, file chip, grids and cards */
+:where([data-theme='dark']) .drop {
+  color: #9aa4b0;
+  background: #21262d;
+  border-color: #4a525e;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+:where([data-theme='dark']) .drop strong {
+  color: #8fbdf0;
+}
+:where([data-theme='dark']) .drop:hover,
+:where([data-theme='dark']) .drop.over {
+  background: #33301c;
+  border-color: #b89f3a;
+}
+:where([data-theme='dark']) .filechip {
+  color: #9fd0ea;
+  background: #1f3644;
+  border-color: #2f5266;
+}
+:where([data-theme='dark']) .pagegrid,
+:where([data-theme='dark']) .stage-scroll,
+:where([data-theme='dark']) .rs-editor {
+  background: #1f242b;
+  border-color: #3d4551;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+:where([data-theme='dark']) .pcard {
+  background: #2c323b;
+  border-color: #454d59;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+:where([data-theme='dark']) .pcard.selected {
+  border-color: #52a8ec;
+  box-shadow: 0 0 0 3px rgba(82, 168, 236, 0.6), 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+:where([data-theme='dark']) .pcard.dragover {
+  background: #33301c;
+  border-color: #b89f3a;
+}
+:where([data-theme='dark']) .pframe canvas {
+  border-color: #555;
+}
+:where([data-theme='dark']) .pframe canvas.pending {
+  background: #3a414b;
+  border-color: #3a414b;
+}
+:where([data-theme='dark']) .pbar {
+  border-top-color: #3d4551;
+}
+:where([data-theme='dark']) .file-card .pframe img,
+:where([data-theme='dark']) .lb-stage img,
+:where([data-theme='dark']) .lb-stage canvas,
+:where([data-theme='dark']) .thumbs canvas,
+:where([data-theme='dark']) .rs-result img {
+  border-color: #555;
+}
+:where([data-theme='dark']) .file-card.multi .pframe img {
+  box-shadow: 3px 3px 0 #2c323b, 4px 4px 0 #6b7480, 7px 7px 0 #2c323b,
+    8px 8px 0 #6b7480;
+}
+:where([data-theme='dark']) .file-card .thumb-pending,
+:where([data-theme='dark']) .file-card .thumb-none {
+  background: #3a414b;
+}
+:where([data-theme='dark']) .file-card .thumb-none {
+  color: #8e98a4;
+  border-color: #4a525e;
+}
+:where([data-theme='dark']) .orgfile {
+  background: #2c323b;
+  border-color: #454d59;
+}
+:where([data-theme='dark']) .image-card.done {
+  border-color: #4f7a3e;
+}
+
+/* page editors */
+:where([data-theme='dark']) .stage {
+  border-color: #555;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+:where([data-theme='dark']) .pos {
+  color: #9aa4b0;
+}
+:where([data-theme='dark']) .pos span {
+  color: #e6eaef;
+}
+:where([data-theme='dark']) .edit-image-preview {
+  background: #1f242b;
+  border-color: #3d4551;
+}
+:where([data-theme='dark']) .edit-image-preview:hover:not(:disabled) {
+  background: #1f242b;
+  border-color: #52a8ec;
+}
+:where([data-theme='dark']) .fields .ftype {
+  background: #5c6672;
+}
+:where([data-theme='dark']) .lock-advanced summary,
+:where([data-theme='dark']) .lv-name {
+  color: #8fbdf0;
+}
+:where([data-theme='dark']) .ok-text {
+  color: #7fc97f;
+}
+:where([data-theme='dark']) .bad-text {
+  color: #f08a85;
+}
+
+/* compression levels and facts table */
+:where([data-theme='dark']) .level {
+  background: linear-gradient(to bottom, #2f3640, #282e36);
+  border-color: #454d59;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+:where([data-theme='dark']) .level:hover {
+  border-color: #5f84b3;
+}
+:where([data-theme='dark']) .level:has(input:checked) {
+  background: linear-gradient(to bottom, #2a3a50, #243247);
+  border-color: #52a8ec;
+}
+:where([data-theme='dark']) .lv-desc {
+  color: #a9b2bd;
+}
+:where([data-theme='dark']) .facts {
+  border-color: #3d4551;
+}
+:where([data-theme='dark']) .facts div {
+  background: #262b33;
+  border-bottom-color: #353c46;
+}
+:where([data-theme='dark']) .facts div:nth-child(4n + 1),
+:where([data-theme='dark']) .facts div:nth-child(4n + 2) {
+  background: #2c323b;
+}
+:where([data-theme='dark']) .facts dt {
+  color: #9aa4b0;
+}
+
+/* result panel, viewer, footer, alerts */
+:where([data-theme='dark']) .rs-result,
+:where([data-theme='dark']) .card.result {
+  color: #a9d6a0;
+  background: #22331f;
+  border-color: #3f5f37;
+}
+:where([data-theme='dark']) .result-head h2 {
+  color: #b7e0ae;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+:where([data-theme='dark']) .result-head .muted {
+  color: #8fbd86;
+}
+:where([data-theme='dark']) .thumbs {
+  background: #1f242b;
+  border-color: #3f5f37;
+}
+:where([data-theme='dark']) .thumbs figcaption {
+  color: #9aa4b0;
+}
+:where([data-theme='dark']) .lb-frame {
+  background: #262b33;
+}
+:where([data-theme='dark']) .lb-bar {
+  color: #c3cad3;
+}
+:where([data-theme='dark']) .footer {
+  color: #8e98a4;
+  text-shadow: none;
+  border-top-color: #3d4551;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+:where([data-theme='dark']) .noscript,
+:where([data-theme='dark']) .alert {
+  color: #f4b5b0;
+  text-shadow: none;
+  background: #3b2224;
+  border-color: #6a3338;
+}
+@media (max-width: 800px) {
+  :where([data-theme='dark']) .sidebar {
+    background-color: #1b1f26;
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.03) 0 2px,
+      transparent 2px 5px
+    );
+  }
+  :where([data-theme='dark']) .facts div:nth-child(n) {
+    background: #262b33;
+  }
+  :where([data-theme='dark']) .facts div:nth-child(odd) {
+    background: #2c323b;
+  }
+}

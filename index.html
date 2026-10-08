@@ -9,6 +9,22 @@
       content="Merge, organize, watermark, fill and edit PDFs for free. Everything runs in your browser — your files are never uploaded."
     />
     <meta name="theme-color" content="#2a5eab" />
+    <script>
+      // Pick the theme before the first paint so the page doesn't flash:
+      // the saved choice if there is one, otherwise the system setting.
+      (function () {
+        var theme;
+        try {
+          theme = localStorage.getItem('pdfstudio-theme');
+        } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
     <meta property="og:title" content="PDF Studio" />
     <meta
       property="og:description"
@@ -69,6 +85,15 @@
         <div class="tagline">
           The free &amp; easy way to work with PDFs online!
         </div>
+        <button
+          type="button"
+          class="theme-toggle"
+          id="theme-toggle"
+          aria-label="Switch to dark theme"
+          title="Switch to dark theme"
+        >
+          ☾
+        </button>
       </div>
     </header>
 
