@@ -17,7 +17,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
 | **Redact PDF**        | Black out areas for good: drag boxes or find text on every page; marked pages are flattened so hidden text is removed            |
-| **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo                                          |
+| **Add text & images** | Click (or use the arrow keys) to place text, an image or a ready-made stamp (tick, cross, box, arrow…), with zoom and undo       |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                                              |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten                                         |
 | **Compress images**   | Shrink HEIC/HEIF, JPEG, PNG, WebP, AVIF, GIF and BMP images; save as JPEG, WebP or PNG, resize, compare, download as .zip        |

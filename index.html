@@ -248,7 +248,8 @@
           <h1 id="h-edit">Add text &amp; images</h1>
           <p class="sub">
             Click on the page where you want to place something, then press “Add
-            to page”.
+            to page”. Add your own text or image, or a ready-made tick, cross,
+            box or arrow.
           </p>
           <label class="drop" id="edit-drop">
             <input type="file" accept=".pdf,application/pdf" hidden />
@@ -337,6 +338,7 @@
                   <div class="marker" id="edit-marker" hidden>
                     <span class="ghost" id="edit-ghost"></span>
                     <span class="imgbox" id="edit-imgbox"></span>
+                    <span class="stampbox" id="edit-stampbox"></span>
                     <span class="dot"></span>
                   </div>
                 </div>
@@ -355,11 +357,17 @@
                 <button type="button" data-mode="image" aria-pressed="false">
                   Image
                 </button>
+                <button type="button" data-mode="stamp" aria-pressed="false">
+                  Stamps
+                </button>
               </div>
               <div id="edit-text-opts" class="form-grid">
                 <label
                   >Text<textarea id="edit-text" rows="3">Approved</textarea>
                 </label>
+                <button type="button" id="edit-today">
+                  Insert today&rsquo;s date
+                </button>
                 <label
                   >Font
                   <select id="edit-font">
@@ -413,6 +421,38 @@
                 <p class="hint">
                   72 points = 1 inch. The image's top-left corner goes where you
                   click.
+                </p>
+              </div>
+              <div id="edit-stamp-opts" class="form-grid" hidden>
+                <div
+                  class="stamps"
+                  id="edit-stamps"
+                  role="group"
+                  aria-label="Stamp"
+                ></div>
+                <div class="two">
+                  <label
+                    >Size (points)<input
+                      id="edit-stamp-size"
+                      type="number"
+                      min="4"
+                      max="500"
+                      value="16"
+                  /></label>
+                  <label
+                    >Color<input
+                      id="edit-stamp-color"
+                      type="color"
+                      value="#000000"
+                  /></label>
+                </div>
+                <label class="inline check"
+                  ><input type="checkbox" id="edit-stamp-quick" /> Add with
+                  each click</label
+                >
+                <p class="hint">
+                  The middle of the stamp goes where you click &mdash; handy for
+                  ticking boxes on a form.
                 </p>
               </div>
               <div class="pos" aria-live="polite">

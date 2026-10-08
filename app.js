@@ -85,6 +85,7 @@
     PDFDropdown,
     PDFOptionList,
     PDFRadioGroup,
+    LineCapStyle,
   } = PDFLib;
 
   const iconBtn = (label, title, onclick, disabled = false) =>
@@ -1418,6 +1419,97 @@
   const stage = $('#edit-stage');
   const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
+  // Ready-made marks. Each is drawn in a 100 × 100 box (SVG coordinates, y
+  // down) from one or more paths: stroked with width `w`, or filled. The same
+  // paths draw the button, the on-page preview and the mark in the PDF.
+  const BOX = 'M10 10H90V90H10Z';
+  const STAMPS = {
+    tick: { label: 'Tick', parts: [{ d: 'M14 54L40 80L88 22', w: 12 }] },
+    cross: { label: 'Cross', parts: [{ d: 'M20 20L80 80M80 20L20 80', w: 12 }] },
+    box: { label: 'Empty box', parts: [{ d: BOX, w: 7 }] },
+    boxTick: {
+      label: 'Ticked box',
+      parts: [
+        { d: BOX, w: 7 },
+        { d: 'M27 52L44 69L75 30', w: 10 },
+      ],
+    },
+    boxCross: {
+      label: 'Crossed box',
+      parts: [
+        { d: BOX, w: 7 },
+        { d: 'M30 30L70 70M70 30L30 70', w: 10 },
+      ],
+    },
+    dot: {
+      label: 'Dot',
+      parts: [{ d: 'M50 18A32 32 0 1 0 50 82A32 32 0 1 0 50 18Z', fill: true }],
+    },
+    circle: {
+      label: 'Circle',
+      parts: [{ d: 'M50 10A40 40 0 1 0 50 90A40 40 0 1 0 50 10Z', w: 7 }],
+    },
+    line: { label: 'Line', parts: [{ d: 'M5 50H95', w: 7 }] },
+    arrow: {
+      label: 'Arrow',
+      parts: [{ d: 'M8 50H88M62 24L90 50L62 76', w: 9 }],
+    },
+    star: {
+      label: 'Star',
+      parts: [
+        {
+          d: 'M50 8L61 38L93 39L68 59L77 90L50 72L23 90L32 59L7 39L39 38Z',
+          fill: true,
+        },
+      ],
+    },
+  };
+  edit.stamp = 'tick';
+
+  /** A stamp as an inline SVG that takes the surrounding text colour. */
+  function stampSvg(id) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const part of STAMPS[id].parts) {
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', part.d);
+      if (part.fill) path.setAttribute('fill', 'currentColor');
+      else {
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', 'currentColor');
+        path.setAttribute('stroke-width', part.w);
+        path.setAttribute('stroke-linecap', 'round');
+      }
+      svg.append(path);
+    }
+    return svg;
+  }
+
+  for (const [id, { label }] of Object.entries(STAMPS)) {
+    $('#edit-stamps').append(
+      el(
+        'button',
+        {
+          type: 'button',
+          title: label,
+          'aria-label': label,
+          'aria-pressed': String(id === edit.stamp),
+          'data-stamp': id,
+          onclick: () => {
+            edit.stamp = id;
+            $$('#edit-stamps button').forEach((b) =>
+              b.setAttribute('aria-pressed', String(b.dataset.stamp === id)),
+            );
+            drawMarker();
+          },
+        },
+        stampSvg(id),
+      ),
+    );
+  }
+
   /** Width available for the page inside the scrollable editor area. */
   function editFitWidth() {
     const box = $('#edit-scroll');
@@ -1528,9 +1620,22 @@
     const scale = edit.viewport.scale;
     const ghost = $('#edit-ghost');
     const imgbox = $('#edit-imgbox');
+    const stampbox = $('#edit-stampbox');
     ghost.hidden = edit.mode !== 'text';
     imgbox.hidden = edit.mode !== 'image' || !edit.image;
-    if (edit.mode === 'text') {
+    stampbox.hidden = edit.mode !== 'stamp';
+    if (edit.mode === 'stamp') {
+      // Centred on the marker, like the mark will be on the page.
+      const px = clampNum($('#edit-stamp-size').value, 4, 500, 16) * scale;
+      Object.assign(stampbox.style, {
+        width: `${px}px`,
+        height: `${px}px`,
+        left: `${-px / 2}px`,
+        top: `${-px / 2}px`,
+        color: $('#edit-stamp-color').value,
+      });
+      stampbox.replaceChildren(stampSvg(edit.stamp));
+    } else if (edit.mode === 'text') {
       const px = clampNum($('#edit-size').value, 4, 300, 24) * scale;
       const font = $('#edit-font').value;
       ghost.textContent = $('#edit-text').value;
@@ -1562,6 +1667,10 @@
     );
     edit.point = { x, y };
     drawMarker();
+    // Stamps can go straight onto the page, one per click.
+    if (edit.mode === 'stamp' && $('#edit-stamp-quick').checked) {
+      $('#edit-add').click();
+    }
   });
 
   // Keyboard placement: arrows move the marker (Shift = faster), Enter adds.
@@ -1611,6 +1720,7 @@
       });
       $('#edit-text-opts').hidden = edit.mode !== 'text';
       $('#edit-image-opts').hidden = edit.mode !== 'image';
+      $('#edit-stamp-opts').hidden = edit.mode !== 'stamp';
       drawMarker();
     }),
   );
@@ -1620,7 +1730,18 @@
     '#edit-color',
     '#edit-font',
     '#edit-img-width',
+    '#edit-stamp-size',
+    '#edit-stamp-color',
   ].forEach((s) => $(s).addEventListener('input', drawMarker));
+
+  $('#edit-today').addEventListener('click', () => {
+    $('#edit-text').value = new Date().toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    drawMarker();
+  });
 
   $('#edit-image').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -1686,6 +1807,27 @@
               `Can't draw that text with a standard font: ${err.message}`,
             );
           }
+        } else if (edit.mode === 'stamp') {
+          const size = clampNum($('#edit-stamp-size').value, 4, 500, 16);
+          const color = hexToRgb($('#edit-stamp-color').value);
+          const t = (angle * Math.PI) / 180;
+          const half = size / 2;
+          for (const part of STAMPS[edit.stamp].parts) {
+            page.drawSvgPath(part.d, {
+              // The click marks the centre; the path starts at its top-left.
+              x: x - half * Math.cos(t) - half * Math.sin(t),
+              y: y - half * Math.sin(t) + half * Math.cos(t),
+              scale: size / 100,
+              rotate: degrees(angle),
+              ...(part.fill
+                ? { color }
+                : {
+                    borderColor: color,
+                    borderWidth: part.w,
+                    borderLineCap: LineCapStyle.Round,
+                  }),
+            });
+          }
         } else {
           if (!edit.image) throw new Error('Choose an image first');
           const img = await embedImage(doc, edit.image);
@@ -1706,7 +1848,12 @@
         edit.point = null;
         unsaved = true;
         await renderEdit();
-        toast(edit.mode === 'text' ? 'Text added' : 'Image added', 'ok');
+        toast(
+          { text: 'Text added', image: 'Image added', stamp: 'Stamp added' }[
+            edit.mode
+          ],
+          'ok',
+        );
       }).then(drawMarker), // run() re-enables the button; re-apply "needs a position"
   );
 
