@@ -664,6 +664,8 @@
           hidden
         >
           <h1 id="h-unlock">Remove password</h1>
+          <!-- Owns the password field (see "password forms" in app.js). -->
+          <form id="unlock-form" hidden></form>
           <p class="sub">
             Unlock a password-protected PDF, or remove restrictions on printing,
             copying and editing, so it opens freely everywhere.
@@ -679,6 +681,7 @@
               <input
                 id="unlock-password"
                 type="password"
+                form="unlock-form"
                 autocomplete="off"
                 spellcheck="false"
                 autocapitalize="off"
@@ -710,6 +713,7 @@
           hidden
         >
           <h1 id="h-lock">Lock PDF</h1>
+          <form id="lock-form" hidden></form>
           <p class="sub">
             Protect a PDF with a password, and optionally stop others printing,
             copying or editing it. Uses AES-256, the strongest PDF encryption.
@@ -725,6 +729,7 @@
               <input
                 id="lock-password"
                 type="password"
+                form="lock-form"
                 autocomplete="new-password"
                 spellcheck="false"
                 autocapitalize="off"
@@ -737,6 +742,7 @@
               <input
                 id="lock-confirm"
                 type="password"
+                form="lock-form"
                 autocomplete="new-password"
                 spellcheck="false"
                 autocapitalize="off"
@@ -769,6 +775,7 @@
               <input
                 id="lock-owner"
                 type="password"
+                form="lock-form"
                 autocomplete="new-password"
                 spellcheck="false"
                 autocapitalize="off"
