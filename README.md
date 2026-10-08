@@ -9,7 +9,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 | Tool                  | What it does                                                                                                                     |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order                                           |
+| **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order, rotate a file to turn all its pages      |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                            |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                           |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
