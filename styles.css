@@ -839,6 +839,39 @@ label.check input {
   white-space: pre;
   opacity: 0.55;
 }
+.marker .stampbox {
+  position: absolute;
+  opacity: 0.75;
+}
+.marker .stampbox svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.stamps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.stamps button {
+  padding: 5px;
+  line-height: 0;
+}
+.stamps svg {
+  width: 20px;
+  height: 20px;
+}
+.stamps button[aria-pressed='true'] {
+  color: #fff;
+  text-shadow: none;
+  background: linear-gradient(to bottom, #6fa1e4, #3a70c0);
+  border-color: #2f5f9f;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.tabs button + button {
+  border-left: 0;
+}
 .marker .imgbox {
   position: absolute;
   left: 0;
