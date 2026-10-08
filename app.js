@@ -845,6 +845,7 @@
           name: file.name,
           bytes,
           pages: doc.getPageCount(),
+          rot: 0,
           thumbPending: !!pdfjs,
         };
         merge.files.push(item);
@@ -896,6 +897,17 @@
     drawMerge();
   }
 
+  /** Opens a file in the viewer with the rotation chosen on its card. */
+  function viewFile(f) {
+    openViewer(f.bytes, {
+      pages: Array.from({ length: f.pages }, (_, index) => ({
+        index,
+        rot: f.rot,
+      })),
+      title: f.name,
+    });
+  }
+
   function drawMerge() {
     const { files } = merge;
     const grid = $('#merge-grid');
@@ -907,7 +919,11 @@
     grid.innerHTML = '';
     files.forEach((f, i) => {
       const thumb = f.thumbUrl
-        ? el('img', { src: f.thumbUrl, alt: '' })
+        ? el('img', {
+            src: f.thumbUrl,
+            alt: '',
+            style: `transform:rotate(${f.rot}deg)`,
+          })
         : el(
             'span',
             { class: f.thumbPending ? 'thumb-pending' : 'thumb-none' },
@@ -919,18 +935,18 @@
           class: 'pframe',
           role: 'button',
           tabindex: '0',
-          'aria-label': `${f.name}, ${plural(f.pages, 'page')}, position ${
-            i + 1
-          } of ${files.length}`,
+          'aria-label': `${f.name}, ${plural(f.pages, 'page')}${
+            norm360(f.rot) ? `, rotated ${norm360(f.rot)}°` : ''
+          }, position ${i + 1} of ${files.length}`,
           title: `${f.name} — click to view, drag to change the order`,
-          onclick: () => openViewer(f.bytes, { title: f.name }),
+          onclick: () => viewFile(f),
         },
         thumb,
       );
       frame.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          openViewer(f.bytes, { title: f.name });
+          viewFile(f);
         } else if (
           e.shiftKey &&
           (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
@@ -947,13 +963,26 @@
         { class: `pcard file-card${f.pages > 1 ? ' multi' : ''}` },
         frame,
         el('div', { class: 'fcap', title: f.name }, f.name),
-        el('div', { class: 'fmeta muted small' }, plural(f.pages, 'page')),
+        el(
+          'div',
+          { class: 'fmeta muted small' },
+          plural(f.pages, 'page') +
+            (norm360(f.rot) ? ` · rotated ${norm360(f.rot)}°` : ''),
+        ),
         el(
           'div',
           { class: 'pbar' },
           el('span', { class: 'num' }, i + 1),
-          iconBtn('⤢', `View ${f.name} full size`, () =>
-            openViewer(f.bytes, { title: f.name }),
+          iconBtn('⤢', `View ${f.name} full size`, () => viewFile(f)),
+          iconBtn(
+            '↺',
+            `Rotate ${f.name} left`,
+            () => ((f.rot -= 90), (merge.focus = i), drawMerge()),
+          ),
+          iconBtn(
+            '↻',
+            `Rotate ${f.name} right`,
+            () => ((f.rot += 90), (merge.focus = i), drawMerge()),
           ),
           iconBtn(
             '←',
@@ -998,7 +1027,11 @@
       for (const file of merge.files) {
         const src = await loadPdf(file.bytes);
         const pages = await out.copyPages(src, src.getPageIndices());
-        pages.forEach((p) => out.addPage(p));
+        const rot = norm360(file.rot);
+        pages.forEach((p) => {
+          if (rot) p.setRotation(degrees(norm360(p.getRotation().angle + rot)));
+          out.addPage(p);
+        });
       }
       await showResult(await out.save(), 'merged.pdf');
     }),

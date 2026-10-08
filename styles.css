@@ -674,6 +674,7 @@ label.check input {
   max-height: calc(100% - 10px);
   background: #fff;
   border: 1px solid #ccc;
+  transition: transform 0.2s;
 }
 /* Checkerboard behind images so transparent areas are visible. */
 .image-card .pframe img,
