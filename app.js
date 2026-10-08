@@ -1121,7 +1121,7 @@
       if (!many || !org.pages.some((p) => p.file === f)) f.stacked = false;
     }
 
-    // One chip per file, shown once there is more than one to tell apart.
+    // One row per file, shown once there is more than one to tell apart.
     const chips = $('#org-files');
     chips.innerHTML = '';
     chips.hidden = !many;
@@ -1150,6 +1150,7 @@
               'button',
               {
                 type: 'button',
+                class: 'fsel',
                 'aria-label': `${allSel ? 'Deselect' : 'Select'} the pages of ${
                   f.name
                 }`,
@@ -1168,6 +1169,7 @@
                 title: f.stacked
                   ? 'Show its pages one by one again'
                   : 'Show its pages as one card that moves together',
+                class: 'fstack',
                 'aria-label': `${f.stacked ? 'Unstack' : 'Stack'} the pages of ${
                   f.name
                 }`,
@@ -1186,10 +1188,12 @@
       );
       const allStacked =
         stackable.length > 0 && stackable.every((f) => f.stacked);
-      chips.append(
+      // A heading row on top of the list, with the button for all files.
+      chips.prepend(
         el(
           'li',
-          { class: 'orgfile-all' },
+          { class: 'orgfiles-head' },
+          el('span', {}, 'Files'),
           el(
             'button',
             {

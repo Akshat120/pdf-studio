@@ -655,45 +655,71 @@ label.check input {
 
 /* ---------- merge & organize: the files the pages come from ---------- */
 .orgfiles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  max-height: 233px; /* about six files; more scroll */
   margin: 14px 0 0;
   padding: 0;
+  overflow-y: auto;
   list-style: none;
+  border: 1px solid #d4d9df;
+  border-radius: 4px;
 }
+.orgfiles-head,
 .orgfile {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 100%;
-  padding: 4px 6px 4px 8px;
-  background: #fff;
-  border: 1px solid #d4d9df;
-  border-radius: 4px;
+  padding: 5px 8px;
 }
+.orgfiles-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  justify-content: space-between;
+  font-weight: bold;
+  color: #666;
+  background: linear-gradient(to bottom, #fafafa, #ececec);
+  border-bottom: 1px solid #d4d4d4;
+}
+.orgfile {
+  background: #fff;
+  border-bottom: 1px solid #e6e9ed;
+}
+.orgfile:nth-child(odd) {
+  background: #f4f7fa;
+}
+.orgfile:last-child {
+  border-bottom: 0;
+}
+/* The name takes the spare room, so the page counts and buttons line up
+   in columns down the right-hand side. */
 .orgfile .fname {
+  flex: 1;
   min-width: 0;
-  max-width: 220px;
   overflow: hidden;
   font-weight: bold;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.orgfile button {
+.orgfile .muted {
+  flex: none;
+  min-width: 78px;
+  text-align: right;
+  white-space: nowrap;
+}
+.orgfiles button {
+  flex: none;
   padding: 1px 8px;
   font-size: 12px;
+}
+.orgfile .fsel {
+  min-width: 92px;
+}
+.orgfile .fstack,
+.orgfiles-head button {
+  min-width: 82px;
 }
 .orgfiles + .toolbar {
   margin-top: 10px;
-}
-.orgfile-all {
-  display: flex;
-  align-items: center;
-}
-.orgfile-all button {
-  padding: 1px 8px;
-  font-size: 12px;
 }
 .orgfile button[aria-pressed='true'] {
   color: #fff;
@@ -701,6 +727,26 @@ label.check input {
   background: linear-gradient(to bottom, #6fa1e4, #3a70c0);
   border-color: #2f5f9f;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+@media (min-width: 801px) {
+  /* Sit "Stack all" above the Stack column, left of the ✕ buttons. */
+  .orgfiles-head button {
+    margin-right: 35px;
+  }
+}
+@media (max-width: 800px) {
+  /* Name on its own line, the count and buttons underneath. */
+  .orgfile {
+    flex-wrap: wrap;
+  }
+  .orgfile .fname {
+    flex-basis: calc(100% - 40px);
+  }
+  .orgfile .muted {
+    min-width: 0;
+    margin-right: auto;
+    text-align: left;
+  }
 }
 /* A stacked file: its first page with a little pile of paper behind it. */
 .pcard.stack .pframe canvas {
@@ -2197,9 +2243,20 @@ body.busy * {
   box-shadow: 3px 3px 0 #d6dbe2, 4px 4px 0 #555, 7px 7px 0 #d6dbe2,
     8px 8px 0 #555;
 }
+:where([data-theme='dark']) .orgfiles {
+  border-color: #3d4551;
+}
+:where([data-theme='dark']) .orgfiles-head {
+  color: #a9b2bd;
+  background: linear-gradient(to bottom, #353c46, #2b313a);
+  border-bottom-color: #454d59;
+}
 :where([data-theme='dark']) .orgfile {
+  background: #262b33;
+  border-bottom-color: #353c46;
+}
+:where([data-theme='dark']) .orgfile:nth-child(odd) {
   background: #2c323b;
-  border-color: #454d59;
 }
 :where([data-theme='dark']) .image-card.done {
   border-color: #4f7a3e;
