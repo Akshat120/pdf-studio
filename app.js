@@ -3159,7 +3159,30 @@
     strong: { maxSide: 1100, quality: 0.5 },
   };
 
+  // "Target size" searches between a barely visible re-save (strength 0) and a
+  // very strong one (strength 1) for the gentlest setting that is small enough.
+  const targetSettings = (strength) => ({
+    maxSide: Math.round(4000 * Math.pow(600 / 4000, strength)),
+    quality: 0.95 - 0.7 * strength,
+  });
+
   const cmp = { bytes: null, name: '' };
+
+  function syncCmpTarget() {
+    const pct = +$('#cmp-target').value;
+    $('#cmp-target-val').textContent =
+      `${pct}% smaller` +
+      (cmp.bytes
+        ? ` (${formatBytes(cmp.bytes.length * (1 - pct / 100))} or less)`
+        : '');
+  }
+  $('#cmp-target').addEventListener('input', () => {
+    $('#cmp-level-target').checked = true;
+    syncCmpTarget();
+  });
+  $('.level-wide').addEventListener('click', (e) => {
+    if (!e.target.closest('input, label')) $('#cmp-level-target').checked = true;
+  });
 
   setupDrop($('#cmp-drop'), async ([file]) => {
     const bytes = await readFile(file);
@@ -3173,6 +3196,7 @@
     )} · ${formatBytes(bytes.length)}`;
     $('#cmp-status').textContent = 'Pick a level, then compress.';
     $('#cmp-run').disabled = false;
+    syncCmpTarget();
   });
 
   /** Deletes objects that nothing in the document refers to any more, e.g.
@@ -3356,33 +3380,71 @@
     return { total: images.length - masks.size, shrunk };
   }
 
+  /** One compression pass over the original file. `settings` is the photo
+   *  size/quality to use, or null for the lossless steps only. */
+  async function compressOnce(settings, progress) {
+    progress('Reading the PDF…');
+    const doc = await loadPdf(cmp.bytes);
+    const { context } = doc;
+    const removed = removeUnusedObjects(context);
+    progress('Compressing uncompressed data…');
+    const deflated = deflateUncompressedStreams(context);
+    const images = settings
+      ? await recompressImages(context, settings, progress)
+      : null;
+    progress('Saving…');
+    const out = await doc.save({
+      useObjectStreams: true,
+      addDefaultPage: false,
+      updateFieldAppearances: false, // don't restyle existing form fields
+    });
+    return { out, removed, deflated, images };
+  }
+
+  /** Finds the gentlest compression that gets the file down to `target`
+   *  bytes. If nothing does, returns the smallest result with `missed` set. */
+  async function compressToTarget(target, progress) {
+    const attempt = (n, strength) =>
+      compressOnce(strength == null ? null : targetSettings(strength), (text) =>
+        progress(`Attempt ${n}: ${text}`),
+      );
+    const lossless = await attempt(1, null);
+    if (lossless.out.length <= target) return lossless;
+    // If even the strongest setting isn't enough, there's nothing to search.
+    const strongest = await attempt(2, 1);
+    if (strongest.out.length > target) {
+      const smallest =
+        strongest.out.length < lossless.out.length ? strongest : lossless;
+      return { ...smallest, missed: true };
+    }
+    let hit = strongest;
+    let lo = 0;
+    let hi = 1;
+    for (let n = 3; n <= 6; n++) {
+      const mid = (lo + hi) / 2;
+      const result = await attempt(n, mid);
+      if (result.out.length > target) lo = mid;
+      else {
+        hi = mid;
+        if (result.out.length > hit.out.length) hit = result; // gentler
+        if (result.out.length >= target * 0.9) break; // close enough
+      }
+    }
+    return hit;
+  }
+
   $('#cmp-run').addEventListener('click', (e) =>
     run(e.currentTarget, async () => {
       const level = $('input[name="cmp-level"]:checked').value;
       const status = $('#cmp-status');
       const progress = (text) => (status.textContent = text);
-      progress('Reading the PDF…');
-      const doc = await loadPdf(cmp.bytes);
-      const { context } = doc;
-      const removed = removeUnusedObjects(context);
-      progress('Compressing uncompressed data…');
-      const deflated = deflateUncompressedStreams(context);
-      let images = null;
-      if (COMPRESS_LEVELS[level]) {
-        images = await recompressImages(
-          context,
-          COMPRESS_LEVELS[level],
-          progress,
-        );
-      }
-      progress('Saving…');
-      const out = await doc.save({
-        useObjectStreams: true,
-        addDefaultPage: false,
-        updateFieldAppearances: false, // don't restyle existing form fields
-      });
-
       const before = cmp.bytes.length;
+      const wanted = +$('#cmp-target').value;
+      const { out, removed, deflated, images, missed } =
+        level === 'target'
+          ? await compressToTarget(before * (1 - wanted / 100), progress)
+          : await compressOnce(COMPRESS_LEVELS[level], progress);
+
       const details = [
         removed && plural(removed, 'unused object') + ' removed',
         deflated && plural(deflated, 'stream') + ' compressed',
@@ -3391,17 +3453,25 @@
       ].filter(Boolean);
       if (out.length >= before) {
         progress(
-          'This PDF is already as compact as this level can make it' +
-            (level === 'strong' ? '.' : ' — try a stronger level.'),
+          level === 'target'
+            ? 'This PDF can’t be made any smaller here.'
+            : 'This PDF is already as compact as this level can make it' +
+                (level === 'strong' ? '.' : ' — try a stronger level.'),
         );
         toast('No saving possible at this level; the original is unchanged.');
         return;
       }
       const pct = Math.round((1 - out.length / before) * 100);
       progress(
-        `${formatBytes(before)} → ${formatBytes(out.length)}` +
+        (missed
+          ? `Couldn’t reach ${wanted}% smaller — ${pct}% is the most this PDF can shrink here. `
+          : '') +
+          `${formatBytes(before)} → ${formatBytes(out.length)}` +
           (details.length ? `. ${details.join(' · ')}` : ''),
       );
+      if (missed) {
+        toast(`Got ${pct}% smaller, not ${wanted}% — that is this file’s limit.`);
+      }
       await showResult(
         out,
         `${baseName(cmp.name)}-compressed.pdf`,

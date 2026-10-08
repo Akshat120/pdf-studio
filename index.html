@@ -1052,6 +1052,33 @@
                 Images look softer.</span
               >
             </label>
+            <div class="level level-wide">
+              <input
+                type="radio"
+                name="cmp-level"
+                value="target"
+                id="cmp-level-target"
+              />
+              <label class="lv-name" for="cmp-level-target">Target size</label>
+              <span class="lv-desc"
+                >Choose how much smaller the file should be. Photos are re-saved
+                only as much as needed to get there.</span
+              >
+              <div class="lv-target">
+                <label for="cmp-target">Make it about</label>
+                <input
+                  type="range"
+                  id="cmp-target"
+                  min="10"
+                  max="90"
+                  step="5"
+                  value="50"
+                />
+                <output id="cmp-target-val" for="cmp-target"
+                  >50% smaller</output
+                >
+              </div>
+            </div>
           </fieldset>
           <div class="actions">
             <span class="muted" id="cmp-status" aria-live="polite"

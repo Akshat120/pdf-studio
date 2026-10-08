@@ -12,7 +12,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Merge PDFs**        | Combine several PDFs into one; drag first-page cards (or Shift + ←/→) to set the order, rotate a file to turn all its pages      |
 | **Organize pages**    | Reorder (drag or Shift + ←/→), rotate, delete, or extract pages by selection or range                                            |
 | **Crop pages**        | Trim margins or keep part of a page: drag a crop box per page, or use the same crop on every page                                |
-| **Compress PDF**      | Shrink PDFs: lossless clean-up, or re-save large photos at Recommended / Strong levels                                           |
+| **Compress PDF**      | Shrink PDFs: lossless clean-up, re-save large photos at Recommended / Strong levels, or aim for a target such as 50% smaller     |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
 | **Redact PDF**        | Black out areas for good: drag boxes or find text on every page; marked pages are flattened so hidden text is removed            |
