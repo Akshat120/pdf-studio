@@ -4392,6 +4392,227 @@
     }
   })();
 
+  // ------------------------------------------------------------- HEIC to JPG
+
+  const hc = { items: [] };
+
+  setupDrop($('#hc-drop'), async (files) => {
+    for (const file of files) {
+      try {
+        const bytes = await readFile(file);
+        const kind = sniffImage(bytes);
+        if (kind.label !== 'HEIC') {
+          throw new Error(
+            `${file.name} is not a HEIC photo — use Compress images for other formats`,
+          );
+        }
+        const { bitmap, previewUrl } = await decodeImage(file, bytes, kind);
+        hc.items.push({
+          file,
+          name: file.name,
+          size: file.size,
+          width: bitmap.width,
+          height: bitmap.height,
+          previewUrl,
+          out: null, // set after converting: { blob, url, type }
+        });
+        bitmap.close();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+    drawHc();
+  });
+
+  const hcRelease = (it) => {
+    URL.revokeObjectURL(it.previewUrl);
+    if (it.out) URL.revokeObjectURL(it.out.url);
+  };
+  const hcOutName = (it) =>
+    `${baseName(it.name)}.${IMAGE_FORMATS[it.out.type].ext}`;
+  /** Results belong to the settings they were made with. */
+  function hcClearResults() {
+    for (const it of hc.items) {
+      if (it.out) URL.revokeObjectURL(it.out.url);
+      it.out = null;
+    }
+    drawHc();
+  }
+
+  function drawHc() {
+    const { items } = hc;
+    const grid = $('#hc-grid');
+    grid.innerHTML = '';
+    const view = (i) =>
+      openImageViewer(
+        items.map((it) => ({
+          name: it.out ? hcOutName(it) : it.name,
+          url: it.out ? it.out.url : it.previewUrl,
+          width: it.width,
+          height: it.height,
+          size: it.out ? it.out.blob.size : it.size,
+        })),
+        i,
+      );
+    items.forEach((it, i) => {
+      const { out } = it;
+      const frame = el(
+        'div',
+        {
+          class: 'pframe',
+          role: 'button',
+          tabindex: '0',
+          'aria-label': `${it.name}, ${formatBytes(it.size)}${
+            out ? `, converted to ${IMAGE_FORMATS[out.type].label}` : ''
+          }. Open full size.`,
+          title: `${it.name} — click to view`,
+          onclick: () => view(i),
+        },
+        el('img', { src: out ? out.url : it.previewUrl, alt: '' }),
+      );
+      frame.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          view(i);
+        }
+      });
+      grid.append(
+        el(
+          'div',
+          { class: `pcard file-card image-card${out ? ' done' : ''}` },
+          frame,
+          el(
+            'div',
+            { class: 'fcap', title: out ? hcOutName(it) : it.name },
+            out ? hcOutName(it) : it.name,
+          ),
+          el(
+            'div',
+            { class: 'fmeta muted small' },
+            `${it.width} × ${it.height} · `,
+            out
+              ? `${IMAGE_FORMATS[out.type].label} · ${formatBytes(
+                  out.blob.size,
+                )}`
+              : `HEIC · ${formatBytes(it.size)}`,
+          ),
+          el(
+            'div',
+            { class: 'pbar' },
+            el('span', { class: 'num' }, i + 1),
+            out &&
+              iconBtn('⬇', `Download ${hcOutName(it)}`, () =>
+                downloadBlob(out.blob, hcOutName(it)),
+              ),
+            iconBtn('⤢', `View ${it.name} full size`, () => view(i)),
+            iconBtn('✕', `Remove ${it.name}`, () => {
+              hcRelease(items.splice(i, 1)[0]);
+              drawHc();
+            }),
+          ),
+        ),
+      );
+    });
+    const n = items.length;
+    const done = items.filter((it) => it.out).length;
+    grid.hidden = !n;
+    $('#hc-run').disabled = !n;
+    $('#hc-clear').hidden = !n;
+    $('#hc-zip').hidden = done < 2;
+    $('#hc-quality-row').hidden = $('#hc-format').value !== 'image/jpeg';
+    $('#hc-summary').textContent = !n
+      ? 'Add HEIC photos to get started.'
+      : done === n
+      ? `${plural(n, 'photo')} converted — use ⬇ on a photo to save it${
+          n > 1 ? ', or download them all' : ''
+        }.`
+      : `${plural(n, 'photo')} · ${formatBytes(
+          items.reduce((t, it) => t + it.size, 0),
+        )} total`;
+  }
+
+  async function convertHeic(it, type, quality) {
+    // Safari opens HEIC itself, so the photo goes through a canvas. Elsewhere
+    // heic-to decodes it and writes the new file directly, in one step.
+    const bitmap = await createImageBitmap(it.file).catch(() => null);
+    if (!bitmap) {
+      const heicTo = await loadHeicDecoder();
+      return heicTo({ blob: it.file, type, quality });
+    }
+    // Stay within the browser's canvas limit (iOS Safari: ~16.7 MP).
+    const k = Math.min(
+      1,
+      Math.sqrt(MAX_PIXELS / (bitmap.width * bitmap.height)),
+    );
+    const w = Math.max(1, Math.round(bitmap.width * k));
+    const h = Math.max(1, Math.round(bitmap.height * k));
+    const canvas = el('canvas', { width: w, height: h });
+    const ctx = canvas.getContext('2d');
+    if (type === 'image/jpeg') {
+      ctx.fillStyle = '#fff'; // JPEG has no transparency
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    return new Promise((r) => canvas.toBlob(r, type, quality));
+  }
+
+  $('#hc-run').addEventListener('click', (e) =>
+    run(e.currentTarget, async () => {
+      const type = $('#hc-format').value;
+      const quality = clampNum($('#hc-quality').value, 50, 100, 92) / 100;
+      let failed = 0;
+      for (let i = 0; i < hc.items.length; i++) {
+        const it = hc.items[i];
+        $('#hc-summary').textContent = `Converting ${i + 1} of ${
+          hc.items.length
+        }…`;
+        if (it.out) URL.revokeObjectURL(it.out.url);
+        it.out = null;
+        try {
+          const blob = await convertHeic(it, type, quality);
+          if (!blob) throw new Error('the browser could not write the file');
+          it.out = { blob, url: URL.createObjectURL(blob), type };
+        } catch (err) {
+          failed++;
+          console.error(err);
+          toast(`${it.name}: ${err.message || err}`, 'error');
+        }
+        await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
+      }
+      drawHc();
+      const ok = hc.items.length - failed;
+      if (ok) toast(`${plural(ok, 'photo')} converted`, 'ok');
+      // A single photo has nothing else to wait for: save it straight away.
+      if (hc.items.length === 1 && ok) {
+        downloadBlob(hc.items[0].out.blob, hcOutName(hc.items[0]));
+      }
+    }),
+  );
+
+  $('#hc-zip').addEventListener('click', () => {
+    Promise.all(
+      hc.items
+        .filter((it) => it.out)
+        .map(async (it) => ({
+          name: hcOutName(it),
+          bytes: new Uint8Array(await it.out.blob.arrayBuffer()),
+        })),
+    )
+      .then((entries) => downloadBlob(makeZip(entries), 'converted-photos.zip'))
+      .catch((err) => toast(err.message, 'error'));
+  });
+  $('#hc-clear').addEventListener('click', () => {
+    hc.items.forEach(hcRelease);
+    hc.items = [];
+    drawHc();
+  });
+  $('#hc-format').addEventListener('change', hcClearResults);
+  $('#hc-quality').addEventListener('input', (e) => {
+    $('#hc-quality-val').textContent = `${e.target.value}%`;
+  });
+  $('#hc-quality').addEventListener('change', hcClearResults);
+
   // ------------------------------------------------------------ resize photo
 
   // Preset sizes. Physical sizes are printed at `dpi` (300 unless noted).

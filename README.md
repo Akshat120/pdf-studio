@@ -14,6 +14,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, re-save large photos at Recommended / Strong levels, or aim for a target such as 50% smaller     |
 | **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF; drag image cards to order the pages                                        |
 | **Resize photo**      | Exact size in px / mm / cm / in, or passport, visa & social presets; drag-to-crop with face guide, max file size (KB), print DPI |
+| **HEIC to JPG**       | Convert iPhone HEIC / HEIF photos to JPG or PNG at full size; download each one or all as a .zip                                 |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
 | **Redact PDF**        | Black out areas for good: drag boxes or find text on every page; marked pages are flattened so hidden text is removed            |
