@@ -138,6 +138,9 @@
             <button type="button" data-tool="resize">
               <span class="ico" aria-hidden="true">▭</span>Resize photo
             </button>
+            <button type="button" data-tool="heic">
+              <span class="ico" aria-hidden="true">⇄</span>HEIC to JPG
+            </button>
             <button type="button" data-tool="unlock">
               <span class="ico" aria-hidden="true">&#x1F513;&#xFE0E;</span
               >Remove password
@@ -1191,6 +1194,66 @@
             >
             <button type="button" class="primary" id="cmp-run" disabled>
               Compress PDF
+            </button>
+          </div>
+        </section>
+
+        <!-- HEIC to JPG / PNG -->
+        <section class="tool card" id="tool-heic" aria-labelledby="h-heic" hidden>
+          <h1 id="h-heic">HEIC to JPG</h1>
+          <p class="sub">
+            Turn iPhone photos (HEIC / HEIF) into JPG or PNG files that open
+            everywhere.
+          </p>
+          <label class="drop" id="hc-drop">
+            <input
+              type="file"
+              accept=".heic,.heif,image/heic,image/heif"
+              multiple
+              hidden
+            />
+            <strong>Choose HEIC photos</strong> or drop them here
+          </label>
+          <div class="pagegrid" id="hc-grid" aria-label="Photos" hidden></div>
+          <div class="form-grid cols">
+            <label
+              >Convert to
+              <select id="hc-format">
+                <option value="image/jpeg" selected>
+                  JPG — smaller, works everywhere
+                </option>
+                <option value="image/png">PNG — lossless, larger files</option>
+              </select>
+            </label>
+            <label id="hc-quality-row">
+              <span class="labelrow"
+                >JPG quality
+                <output class="muted" id="hc-quality-val">92%</output></span
+              >
+              <input
+                id="hc-quality"
+                type="range"
+                min="50"
+                max="100"
+                value="92"
+              />
+            </label>
+          </div>
+          <p class="hint ic-note">
+            Photos keep their full size and are turned the right way up.
+            Location and camera data (EXIF) are removed. Live Photos become
+            still images.
+          </p>
+          <div class="actions">
+            <span class="muted" id="hc-summary" aria-live="polite"
+              >Add HEIC photos to get started.</span
+            >
+            <button type="button" id="hc-clear" hidden>Clear all</button>
+            <button type="button" id="hc-zip" hidden>
+              Download all (.zip)
+            </button>
+            <button type="button" class="primary" id="hc-run" disabled>
+              Convert
             </button>
           </div>
         </section>
