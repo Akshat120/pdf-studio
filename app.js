@@ -9,6 +9,27 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+  // Password managers and email-alias extensions offer to fill any field that
+  // looks like part of a sign-up form, and their popups cover the controls.
+  // Nothing here is account data except the PDF passwords, so every other
+  // field opts out, using the hints the common extensions look for.
+  const NO_AUTOFILL = {
+    autocomplete: 'off',
+    'data-1p-ignore': '', // 1Password
+    'data-lpignore': 'true', // LastPass
+    'data-bwignore': 'true', // Bitwarden
+    'data-protonpass-ignore': 'true', // Proton Pass
+    'data-form-type': 'other', // Dashlane
+  };
+  function noAutofill(node) {
+    if (!/^(INPUT|TEXTAREA)$/.test(node.tagName)) return;
+    if (/^(password|file|checkbox|radio|range|color)$/.test(node.type)) return;
+    for (const [k, v] of Object.entries(NO_AUTOFILL)) {
+      if (!node.hasAttribute(k)) node.setAttribute(k, v);
+    }
+  }
+  $$('input, textarea').forEach(noAutofill);
+
   function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -19,6 +40,7 @@
       else if (v === true) node.setAttribute(k, '');
       else node.setAttribute(k, v);
     }
+    noAutofill(node); // fields built at runtime, e.g. in Fill a form
     for (const c of children.flat()) {
       if (c != null && c !== false) {
         node.append(c instanceof Node ? c : String(c));
