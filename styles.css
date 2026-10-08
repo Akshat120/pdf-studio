@@ -1878,6 +1878,17 @@ body.busy * {
   font-weight: bold;
 }
 
+/* ---------- rotate buttons ---------- */
+.rs-rotate {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.pagenav .icon[id$='-rot-l'] {
+  margin-left: 6px;
+}
+
 /* ---------- theme switch (header) ---------- */
 .theme-toggle {
   flex: none;

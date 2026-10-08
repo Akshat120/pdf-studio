@@ -179,6 +179,18 @@
     }
   }
 
+  /** Returns a copy of a PDF with pages turned by `by` degrees (clockwise):
+   *  the pages listed in `only` (0-based), or every page if it is omitted. */
+  async function rotatePdf(bytes, by, only) {
+    const doc = await loadPdf(bytes);
+    doc.getPages().forEach((page, i) => {
+      if (only && !only.includes(i)) return;
+      page.setRotation(degrees(norm360(page.getRotation().angle + by)));
+    });
+    // Don't restyle existing form fields while we're at it.
+    return doc.save({ updateFieldAppearances: false });
+  }
+
   const isPng = (b) =>
     b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
   const isJpg = (b) => b[0] === 0xff && b[1] === 0xd8;
@@ -546,14 +558,20 @@
 
   // ------------------------------------------------------------ result panel
 
-  const result = { bytes: null, url: null };
+  const result = { bytes: null, url: null, note: '' };
   // Set when the user has edits that exist only in memory (see beforeunload).
   let unsaved = false;
 
   /** Shows a finished PDF. `password` is needed to preview PDFs that were
    *  just locked (pdf-lib can't read encrypted files, so pdf.js counts pages). */
-  async function showResult(bytes, filename, note = '', { password } = {}) {
+  async function showResult(
+    bytes,
+    filename,
+    note = '',
+    { password, quiet } = {},
+  ) {
     let pages;
+    let locked = false;
     try {
       pages = (
         await PDFDocument.load(bytes, { updateMetadata: false })
@@ -563,8 +581,12 @@
       const pdf = await openForView(bytes, password);
       pages = pdf.numPages;
       pdf.destroy();
+      locked = true;
     }
     result.bytes = bytes;
+    result.note = note;
+    // A locked PDF can't be edited any more, so it can't be rotated here.
+    $$('#result-rot-l, #result-rot-r').forEach((b) => (b.hidden = locked));
     if (result.url) URL.revokeObjectURL(result.url);
     result.url = URL.createObjectURL(
       new Blob([bytes], { type: 'application/pdf' }),
@@ -575,11 +597,37 @@
     )}${note ? ` · ${note}` : ''}`;
     const section = $('#result');
     section.hidden = false;
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    section.focus({ preventScroll: true });
+    if (!quiet) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.focus({ preventScroll: true });
+    }
     await renderThumbs(bytes, $('#result-thumbs'), {
       onOpenTitle: () => $('#result-name').value,
       password,
+    });
+  }
+
+  // Rotate every page of the finished PDF, whichever tool made it.
+  for (const [id, by] of [
+    ['#result-rot-l', -90],
+    ['#result-rot-r', 90],
+  ]) {
+    $(id).addEventListener('click', async () => {
+      const buttons = $$('#result-rot-l, #result-rot-r');
+      buttons.forEach((b) => (b.disabled = true));
+      try {
+        await showResult(
+          await rotatePdf(result.bytes, by),
+          $('#result-name').value,
+          result.note,
+          { quiet: true },
+        );
+      } catch (e) {
+        console.error(e);
+        toast(e.message || String(e), 'error');
+      } finally {
+        buttons.forEach((b) => (b.disabled = false));
+      }
     });
   }
 
@@ -1662,6 +1710,21 @@
       }).then(drawMarker), // run() re-enables the button; re-apply "needs a position"
   );
 
+  // Rotating the page is an edit like any other, so Undo takes it back.
+  async function rotateEditPage(by) {
+    const bytes = await rotatePdf(edit.bytes, by, [edit.page]);
+    edit.history.push(edit.bytes);
+    edit.bytes = bytes;
+    unsaved = true;
+    await renderEdit();
+  }
+  $('#edit-rot-l').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateEditPage(-90)),
+  );
+  $('#edit-rot-r').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateEditPage(90)),
+  );
+
   async function undoEdit() {
     if (!edit.history.length) return;
     edit.bytes = edit.history.pop();
@@ -1942,6 +2005,7 @@
           width: bitmap.width,
           height: bitmap.height,
           thumbUrl: imageUrl(img),
+          rot: 0,
         });
         bitmap.close();
       } catch (e) {
@@ -2001,7 +2065,11 @@
           title: `${it.name} — click to view, drag to change the order`,
           onclick: () => viewImages(i),
         },
-        el('img', { src: it.thumbUrl, alt: '' }),
+        el('img', {
+          src: it.thumbUrl,
+          alt: '',
+          style: `transform:rotate(${it.rot}deg)`,
+        }),
       );
       frame.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -2033,6 +2101,16 @@
           { class: 'pbar' },
           el('span', { class: 'num' }, i + 1),
           iconBtn('⤢', `View ${it.name} full size`, () => viewImages(i)),
+          iconBtn(
+            '↺',
+            `Rotate ${it.name} left`,
+            () => ((it.rot -= 90), (imgs.focus = i), drawImgs()),
+          ),
+          iconBtn(
+            '↻',
+            `Rotate ${it.name} right`,
+            () => ((it.rot += 90), (imgs.focus = i), drawImgs()),
+          ),
           iconBtn(
             '←',
             `Move ${it.name} earlier`,
@@ -2076,27 +2154,42 @@
       const margin = clampNum($('#img-margin').value, 0, 1000, 0);
       for (const item of imgs.items) {
         const img = await embedImage(out, item);
+        // The image's size as it will appear, after any rotation.
+        const turn = norm360(item.rot);
+        const [iw, ih] =
+          turn % 180 ? [img.height, img.width] : [img.width, img.height];
         let w;
         let h;
         if (sizeKey === 'fit') {
-          [w, h] = [img.width + 2 * margin, img.height + 2 * margin];
+          [w, h] = [iw + 2 * margin, ih + 2 * margin];
         } else {
           [w, h] = PAGE_SIZES[sizeKey];
           const landscape =
-            orient === 'landscape' ||
-            (orient === 'auto' && img.width > img.height);
+            orient === 'landscape' || (orient === 'auto' && iw > ih);
           if (landscape) [w, h] = [h, w];
         }
         if (w - 2 * margin < 10 || h - 2 * margin < 10) {
           throw new Error('The margin is too large for this page size');
         }
         const page = out.addPage([w, h]);
-        const fit = img.scaleToFit(w - 2 * margin, h - 2 * margin);
+        const k = Math.min((w - 2 * margin) / iw, (h - 2 * margin) / ih);
+        // The box the image fills on the page, and the image's own size.
+        const [bx, by] = [(w - iw * k) / 2, (h - ih * k) / 2];
+        const [dw, dh] = [img.width * k, img.height * k];
+        // pdf-lib turns an image around its bottom-left corner, so that
+        // corner has to start where the turn will carry it into the box.
+        const [x, y] = {
+          0: [bx, by],
+          90: [bx, by + dw],
+          180: [bx + dw, by + dh],
+          270: [bx + dh, by],
+        }[turn];
         page.drawImage(img, {
-          x: (w - fit.width) / 2,
-          y: (h - fit.height) / 2,
-          width: fit.width,
-          height: fit.height,
+          x,
+          y,
+          width: dw,
+          height: dh,
+          rotate: degrees(-turn),
         });
       }
       await showResult(await out.save(), 'images.pdf');
@@ -2485,6 +2578,7 @@
       count: doc.getPageCount(),
       boxes: [],
       history: [],
+      turned: false,
     });
     unsaved = false;
     const select = $('#rd-page');
@@ -2581,7 +2675,7 @@
     rd.boxes = rd.boxes.filter((b) => !remove.has(b.id));
     rd.boxes.push(...(change.add || []));
     if (record) rd.history.push(change);
-    unsaved = rd.boxes.length > 0;
+    unsaved = rd.boxes.length > 0 || rd.turned;
     drawRdBoxes();
     syncRd();
   }
@@ -2596,7 +2690,7 @@
       : 'No areas marked yet.';
     $('#rd-undo').disabled = !rd.history.length;
     $('#rd-clear').disabled = !here;
-    $('#rd-run').disabled = !rd.boxes.length;
+    $('#rd-run').disabled = !rd.boxes.length && !rd.turned;
   }
 
   const rdBox = (page, x1, y1, x2, y2) => ({
@@ -2663,6 +2757,21 @@
       });
       rdStage.classList.toggle('scroll-mode', b.dataset.rdmode === 'scroll');
     }),
+  );
+
+  // Boxes are stored in PDF coordinates, so they stay on the same content
+  // when the page under them is turned.
+  async function rotateRdPage(by) {
+    rd.bytes = await rotatePdf(rd.bytes, by, [rd.page]);
+    rd.turned = true;
+    unsaved = true;
+    await renderRd();
+  }
+  $('#rd-rot-l').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateRdPage(-90)),
+  );
+  $('#rd-rot-r').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateRdPage(90)),
   );
 
   const rdGo = (page) => {
@@ -2857,7 +2966,7 @@
       await showResult(
         bytes,
         `${baseName(rd.name)}-redacted.pdf`,
-        `${plural(marked.size, 'page')} redacted`,
+        marked.size ? `${plural(marked.size, 'page')} redacted` : 'rotated',
       );
     }),
   );
@@ -2929,6 +3038,7 @@
       page: 0,
       count: doc.getPageCount(),
       crops: new Map(),
+      turned: false,
     });
     unsaved = false;
     const select = $('#cr-page');
@@ -2993,13 +3103,13 @@
     $('#cr-reset').disabled = !cr.crops.has(cr.page);
     $('#cr-reset-all').disabled = !n;
     $('#cr-all').disabled = cr.count < 2 || (crIsFull(c) && !n);
-    $('#cr-run').disabled = !n;
+    $('#cr-run').disabled = !n && !cr.turned;
   }
 
   function crSet(box) {
     if (crIsFull(box)) cr.crops.delete(cr.page);
     else cr.crops.set(cr.page, box);
-    unsaved = cr.crops.size > 0;
+    unsaved = cr.crops.size > 0 || cr.turned;
     drawCr();
   }
 
@@ -3131,6 +3241,29 @@
     }),
   );
 
+  // Turning a page turns its crop area with it.
+  async function rotateCrPage(by) {
+    cr.bytes = await rotatePdf(cr.bytes, by, [cr.page]);
+    const c = cr.crops.get(cr.page);
+    if (c) {
+      cr.crops.set(
+        cr.page,
+        by > 0
+          ? { l: 1 - c.b, t: c.l, r: 1 - c.t, b: c.r }
+          : { l: c.t, t: 1 - c.r, r: c.b, b: 1 - c.l },
+      );
+    }
+    cr.turned = true;
+    unsaved = true;
+    await renderCr();
+  }
+  $('#cr-rot-l').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateCrPage(-90)),
+  );
+  $('#cr-rot-r').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateCrPage(90)),
+  );
+
   const crGo = (page) => {
     cr.page = clamp(page, 0, cr.count - 1);
     renderCr();
@@ -3153,7 +3286,7 @@
     if (!crIsFull(c)) {
       for (let i = 0; i < cr.count; i++) cr.crops.set(i, { ...c });
     }
-    unsaved = cr.crops.size > 0;
+    unsaved = cr.crops.size > 0 || cr.turned;
     drawCr();
     toast(
       crIsFull(c)
@@ -3165,7 +3298,7 @@
   $('#cr-reset').addEventListener('click', () => crSet(CR_FULL));
   $('#cr-reset-all').addEventListener('click', () => {
     cr.crops = new Map();
-    unsaved = false;
+    unsaved = cr.turned;
     drawCr();
   });
 
@@ -3208,7 +3341,7 @@
       await showResult(
         bytes,
         `${baseName(cr.name)}-cropped.pdf`,
-        `${plural(cr.crops.size, 'page')} cropped`,
+        cr.crops.size ? `${plural(cr.crops.size, 'page')} cropped` : 'rotated',
       );
     }),
   );
@@ -3825,7 +3958,12 @@
           }`,
           onclick: () => viewIc(i),
         },
-        el('img', { src: out ? out.url : it.previewUrl, alt: '' }),
+        el('img', {
+          src: out ? out.url : it.previewUrl,
+          alt: '',
+          // A finished result is already turned; the original is not.
+          style: out && !out.kept ? '' : `transform:rotate(${it.rot || 0}deg)`,
+        }),
       );
       frame.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -3889,6 +4027,8 @@
                 : downloadBlob(out.blob, outName(it)),
             ),
           iconBtn('⤢', `View ${it.name} full size`, () => viewIc(i)),
+          iconBtn('↺', `Rotate ${it.name} left`, () => rotateIc(i, -90)),
+          iconBtn('↻', `Rotate ${it.name} right`, () => rotateIc(i, 90)),
           iconBtn('✕', `Remove ${it.name}`, () => removeIc(i)),
         ),
       );
@@ -3920,6 +4060,16 @@
     if (focusIndex >= 0) $$('.pframe', grid)[focusIndex]?.focus();
   }
 
+  /** Turns an image. Its compressed result, if any, is out of date then. */
+  function rotateIc(i, by) {
+    const it = ic.items[i];
+    it.rot = (it.rot || 0) + by;
+    if (it.out && !it.out.kept) URL.revokeObjectURL(it.out.url);
+    it.out = null;
+    ic.focus = i;
+    drawIc();
+  }
+
   async function compressOne(it, { format, quality, maxSide }) {
     const type = await outputType(format, it.kind);
     // Target size: the chosen limit, then the canvas pixel limit.
@@ -3944,14 +4094,19 @@
             resizeHeight: h,
             resizeQuality: 'high',
           });
-    const canvas = el('canvas', { width: w, height: h });
+    const turn = norm360(it.rot || 0);
+    // Output size: sideways turns swap width and height.
+    const [ow, oh] = turn % 180 ? [h, w] : [w, h];
+    const canvas = el('canvas', { width: ow, height: oh });
     const ctx = canvas.getContext('2d');
     if (type === 'image/jpeg') {
       // JPEG has no transparency: put see-through areas on white, not black.
       ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, ow, oh);
     }
-    ctx.drawImage(bitmap, 0, 0, w, h); // explicit size: see recompressImage()
+    ctx.translate(ow / 2, oh / 2);
+    ctx.rotate((turn * Math.PI) / 180);
+    ctx.drawImage(bitmap, -w / 2, -h / 2, w, h); // explicit size: see recompressImage()
     if (bitmap !== full) bitmap.close();
     full.close();
     const blob = await new Promise((r) =>
@@ -3965,13 +4120,20 @@
     const resized = w !== it.width || h !== it.height;
     const noGain = blob.size >= it.size;
     if (
+      !turn && // a turned image is always re-saved
       noGain &&
       ((!converted && !resized) ||
         (converted && format === 'keep' && it.kind.label !== 'HEIC'))
     ) {
       return { kept: true, type, width: w, height: h };
     }
-    return { blob, url: URL.createObjectURL(blob), type, width: w, height: h };
+    return {
+      blob,
+      url: URL.createObjectURL(blob),
+      type,
+      width: ow,
+      height: oh,
+    };
   }
 
   $('#ic-run').addEventListener('click', (e) =>
@@ -4127,14 +4289,13 @@
     Object.assign(rs, {
       file,
       name: file.name,
+      kind,
       bitmap,
       previewUrl,
       crop: { cx: 0.5, cy: 0.5, zoom: 1 },
     });
     $('#rs-work').hidden = false;
-    $('#rs-file').textContent = `${file.name} · ${bitmap.width} × ${
-      bitmap.height
-    } px · ${kind.label} · ${formatBytes(file.size)}`;
+    rsDescribe();
     // Draw the crop box once the preview has laid out. (img.decode() can
     // stall in background tabs, so use the load event.)
     $('#rs-image').onload = syncRs;
@@ -4148,6 +4309,49 @@
     $('#rs-zoom').value = 100;
     syncRs();
   });
+
+  function rsDescribe() {
+    $('#rs-file').textContent = `${rs.name} · ${rs.bitmap.width} × ${
+      rs.bitmap.height
+    } px · ${rs.kind.label} · ${formatBytes(rs.file.size)}`;
+  }
+
+  /** Turns the photo a quarter turn; everything after works on the result. */
+  async function rotateRs(by) {
+    const old = rs.bitmap;
+    const canvas = el('canvas', { width: old.height, height: old.width });
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((by * Math.PI) / 180);
+    ctx.drawImage(old, -old.width / 2, -old.height / 2);
+    // PNG keeps transparency for the preview; photos preview faster as JPEG.
+    const photo = /jpe?g|hei[cf]/i.test(rs.kind.label);
+    const blob = await new Promise((r) =>
+      canvas.toBlob(r, photo ? 'image/jpeg' : 'image/png', 0.92),
+    );
+    rs.bitmap = await createImageBitmap(canvas);
+    old.close();
+    if (rs.previewUrl) URL.revokeObjectURL(rs.previewUrl);
+    rs.previewUrl = URL.createObjectURL(blob);
+    rs.crop = { cx: 0.5, cy: 0.5, zoom: 1 };
+    $('#rs-zoom').value = 100;
+    // A custom size follows the photo: swap width and height with it.
+    if ($('#rs-preset').value === 'custom') {
+      const w = $('#rs-width').value;
+      $('#rs-width').value = $('#rs-height').value;
+      $('#rs-height').value = w;
+    }
+    clearRsResult();
+    rsDescribe();
+    $('#rs-image').onload = syncRs;
+    $('#rs-image').src = rs.previewUrl;
+  }
+  $('#rs-rot-l').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateRs(-90)),
+  );
+  $('#rs-rot-r').addEventListener('click', (e) =>
+    run(e.currentTarget, () => rotateRs(90)),
+  );
 
   function clearRsResult() {
     if (rs.out) URL.revokeObjectURL(rs.out.url);
