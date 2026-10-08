@@ -12,15 +12,15 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 | **Merge & organize**  | Combine PDFs and arrange their pages in one grid: reorder (drag or Shift + ←/→), rotate, delete, extract by selection or range   |
 | **Crop pages**        | Trim margins or keep part of a page: drag a crop box per page, or use the same crop on every page                                |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, re-save large photos at Recommended / Strong levels, or aim for a target such as 50% smaller     |
+| **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF; drag image cards to order the pages                                        |
+| **Resize photo**      | Exact size in px / mm / cm / in, or passport, visa & social presets; drag-to-crop with face guide, max file size (KB), print DPI |
 | **Remove password**   | Unlock a password-protected PDF (with its password) or strip printing/copying/editing restrictions                               |
 | **Lock PDF**          | Add a password to open (AES-256) and/or block printing, copying, editing or form filling                                         |
 | **Redact PDF**        | Black out areas for good: drag boxes or find text on every page; marked pages are flattened so hidden text is removed            |
 | **Add text & images** | Click (or use the arrow keys) to place text or an image on any page, with zoom and undo                                          |
 | **Watermark**         | Stamp centered, rotated, semi-transparent text on all or some pages                                                              |
 | **Fill a form**       | Fill text fields, checkboxes, radio groups, dropdowns and list boxes; optionally flatten                                         |
-| **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF; drag image cards to order the pages                                        |
 | **Compress images**   | Shrink HEIC/HEIF, JPEG, PNG, WebP, AVIF, GIF and BMP images; save as JPEG, WebP or PNG, resize, compare, download as .zip        |
-| **Resize photo**      | Exact size in px / mm / cm / in, or passport, visa & social presets; drag-to-crop with face guide, max file size (KB), print DPI |
 | **Title & info**      | Change the title shown in tabs and title bars (kept in sync with XMP), optionally as the file name; edit other properties        |
 
 Page ranges accept forms like `1-3, 5, 8-` (`8-` means "page 8 to the end").
