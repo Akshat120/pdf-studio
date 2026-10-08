@@ -444,7 +444,7 @@
     return page.getViewport({ scale, rotation });
   }
 
-  // Longest side of page thumbnails in the Merge and Organize grids (CSS px).
+  // Longest side of page thumbnails in the Merge & organize grid (CSS px).
   // Their sharpness is capped at 1.5x so a long PDF doesn't use too much memory.
   const GRID_THUMB = 230;
   const GRID_THUMB_OPTS = { fit: GRID_THUMB, maxDpr: 1.5 };
@@ -747,6 +747,7 @@
   // -------------------------------------------------------------- navigation
 
   function showTool(id) {
+    if (id === 'organize') id = 'merge'; // the two tools are one now
     if (!$(`#tool-${id}`)) id = 'merge';
     $$('#nav button').forEach((b) => {
       const active = b.dataset.tool === id;
@@ -831,280 +832,194 @@
   showTool(location.hash.slice(1));
   window.addEventListener('hashchange', () => showTool(location.hash.slice(1)));
 
-  // ------------------------------------------------------------------- merge
+  // ------------------------------------------------------ merge & organize
 
-  const merge = { files: [], dragFrom: -1, focus: -1 };
-
-  setupDrop($('#merge-drop'), async (files) => {
-    const added = [];
-    for (const file of files) {
-      try {
-        const bytes = await readFile(file);
-        const doc = await loadPdf(bytes);
-        const item = {
-          name: file.name,
-          bytes,
-          pages: doc.getPageCount(),
-          rot: 0,
-          thumbPending: !!pdfjs,
-        };
-        merge.files.push(item);
-        added.push(item);
-      } catch (e) {
-        toast(`${file.name}: ${e.message}`, 'error');
-      }
-    }
-    drawMerge();
-    // Draw first-page thumbnails in the background so the files show up right away.
-    for (const item of added) {
-      if (!pdfjs) break;
-      try {
-        item.thumbUrl = await renderFirstPageUrl(item.bytes);
-      } catch (e) {
-        console.error(e);
-      }
-      item.thumbPending = false;
-      if (!merge.files.includes(item)) {
-        if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl); // removed meanwhile
-      } else drawMerge();
-    }
-  });
-
-  /** Renders page 1 of a PDF to a small PNG and returns an object URL for it. */
-  async function renderFirstPageUrl(bytes) {
-    const pdf = await openForView(bytes);
-    try {
-      const canvas = el('canvas');
-      await renderPage(pdf, 1, canvas, GRID_THUMB_OPTS);
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
-      return URL.createObjectURL(blob);
-    } finally {
-      pdf.destroy();
-    }
-  }
-
-  function moveFile(from, to) {
-    if (to < 0 || to >= merge.files.length || from === to) return;
-    merge.files.splice(to, 0, merge.files.splice(from, 1)[0]);
-    merge.focus = to;
-    drawMerge();
-  }
-
-  function removeFile(i) {
-    const [gone] = merge.files.splice(i, 1);
-    if (gone.thumbUrl) URL.revokeObjectURL(gone.thumbUrl);
-    merge.focus = Math.min(i, merge.files.length - 1);
-    drawMerge();
-  }
-
-  /** Opens a file in the viewer with the rotation chosen on its card. */
-  function viewFile(f) {
-    openViewer(f.bytes, {
-      pages: Array.from({ length: f.pages }, (_, index) => ({
-        index,
-        rot: f.rot,
-      })),
-      title: f.name,
-    });
-  }
-
-  function drawMerge() {
-    const { files } = merge;
-    const grid = $('#merge-grid');
-    // Keep keyboard focus on the same card when the grid is rebuilt
-    // (e.g. when a thumbnail finishes rendering).
-    const hadFocus = $$('.pframe', grid).indexOf(document.activeElement);
-    const focusIndex = merge.focus >= 0 ? merge.focus : hadFocus;
-    merge.focus = -1;
-    grid.innerHTML = '';
-    files.forEach((f, i) => {
-      const thumb = f.thumbUrl
-        ? el('img', {
-            src: f.thumbUrl,
-            alt: '',
-            style: `transform:rotate(${f.rot}deg)`,
-          })
-        : el(
-            'span',
-            { class: f.thumbPending ? 'thumb-pending' : 'thumb-none' },
-            f.thumbPending ? '' : 'PDF',
-          );
-      const frame = el(
-        'div',
-        {
-          class: 'pframe',
-          role: 'button',
-          tabindex: '0',
-          'aria-label': `${f.name}, ${plural(f.pages, 'page')}${
-            norm360(f.rot) ? `, rotated ${norm360(f.rot)}°` : ''
-          }, position ${i + 1} of ${files.length}`,
-          title: `${f.name} — click to view, drag to change the order`,
-          onclick: () => viewFile(f),
-        },
-        thumb,
-      );
-      frame.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          viewFile(f);
-        } else if (
-          e.shiftKey &&
-          (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
-        ) {
-          e.preventDefault();
-          moveFile(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
-        } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          e.preventDefault();
-          removeFile(i);
-        }
-      });
-      const card = el(
-        'div',
-        { class: `pcard file-card${f.pages > 1 ? ' multi' : ''}` },
-        frame,
-        el('div', { class: 'fcap', title: f.name }, f.name),
-        el(
-          'div',
-          { class: 'fmeta muted small' },
-          plural(f.pages, 'page') +
-            (norm360(f.rot) ? ` · rotated ${norm360(f.rot)}°` : ''),
-        ),
-        el(
-          'div',
-          { class: 'pbar' },
-          el('span', { class: 'num' }, i + 1),
-          iconBtn('⤢', `View ${f.name} full size`, () => viewFile(f)),
-          iconBtn(
-            '↺',
-            `Rotate ${f.name} left`,
-            () => ((f.rot -= 90), (merge.focus = i), drawMerge()),
-          ),
-          iconBtn(
-            '↻',
-            `Rotate ${f.name} right`,
-            () => ((f.rot += 90), (merge.focus = i), drawMerge()),
-          ),
-          iconBtn(
-            '←',
-            `Move ${f.name} earlier`,
-            () => moveFile(i, i - 1),
-            i === 0,
-          ),
-          iconBtn(
-            '→',
-            `Move ${f.name} later`,
-            () => moveFile(i, i + 1),
-            i === files.length - 1,
-          ),
-          iconBtn('✕', `Remove ${f.name}`, () => removeFile(i)),
-        ),
-      );
-      makeReorderable(card, i, merge, moveFile);
-      grid.append(card);
-    });
-    grid.hidden = !files.length;
-    $('#merge-hint').hidden = files.length < 2;
-    const total = files.reduce((sum, f) => sum + f.pages, 0);
-    $('#merge-summary').textContent = !files.length
-      ? 'Add two or more PDFs to get started.'
-      : files.length === 1
-      ? 'Add at least one more PDF to merge.'
-      : `${plural(files.length, 'file')} · ${plural(total, 'page')} total`;
-    $('#merge-run').disabled = files.length < 2;
-    $('#merge-clear').hidden = !files.length;
-    if (focusIndex >= 0) $$('.pframe', grid)[focusIndex]?.focus();
-  }
-
-  $('#merge-clear').addEventListener('click', () => {
-    merge.files.forEach((f) => f.thumbUrl && URL.revokeObjectURL(f.thumbUrl));
-    merge.files = [];
-    drawMerge();
-  });
-
-  $('#merge-run').addEventListener('click', (e) =>
-    run(e.currentTarget, async () => {
-      const out = await PDFDocument.create();
-      for (const file of merge.files) {
-        const src = await loadPdf(file.bytes);
-        const pages = await out.copyPages(src, src.getPageIndices());
-        const rot = norm360(file.rot);
-        pages.forEach((p) => {
-          if (rot) p.setRotation(degrees(norm360(p.getRotation().angle + rot)));
-          out.addPage(p);
-        });
-      }
-      await showResult(await out.save(), 'merged.pdf');
-    }),
-  );
-
-  // ---------------------------------------------------------------- organize
-
+  // One tool for both jobs: every page of every added PDF sits in one grid.
+  // Each entry of `pages` points at a page of one of `files`, so pages from
+  // different files can be mixed in any order.
   const org = {
-    bytes: null,
-    name: '',
-    pages: [],
-    thumbs: [],
+    files: [], // [{ name, bytes, count, thumbs, tag, colour }]
+    pages: [], // [{ file, src, rot, sel }]
     dragFrom: -1,
     focus: -1,
-    token: 0,
+    added: 0,
   };
+  const FILE_COLOURS = [
+    '#2a5eab',
+    '#c0301f',
+    '#3c8a2e',
+    '#b9770e',
+    '#7d3c98',
+    '#117a8b',
+    '#a23b72',
+    '#5d6d7e',
+  ];
+  /** A, B, … Z, AA, AB, … */
+  const fileTag = (n) =>
+    (n >= 26 ? fileTag(Math.floor(n / 26) - 1) : '') +
+    String.fromCharCode(65 + (n % 26));
 
-  setupDrop($('#org-drop'), async ([file]) => {
-    const bytes = await readFile(file);
-    const doc = await loadPdf(bytes);
-    Object.assign(org, { bytes, name: file.name, focus: -1 });
-    const token = ++org.token;
-    // Correctly shaped placeholders until pdf.js has drawn each page.
-    org.thumbs = doc.getPages().map((p, i) => {
-      const { width, height } = p.getSize();
-      const rotated = p.getRotation().angle % 180 !== 0;
-      const [w, h] = rotated ? [height, width] : [width, height];
-      const k = GRID_THUMB / Math.max(w, h);
-      return el('canvas', {
-        class: 'pending',
-        role: 'img',
-        'aria-label': `Page ${i + 1}`,
-        style: `width:${Math.round(w * k)}px;height:${Math.round(h * k)}px`,
+  setupDrop($('#org-drop'), async (dropped) => {
+    for (const item of dropped) {
+      let bytes, doc;
+      try {
+        bytes = await readFile(item);
+        doc = await loadPdf(bytes);
+      } catch (e) {
+        toast(`${item.name}: ${e.message}`, 'error');
+        continue;
+      }
+      const file = {
+        name: item.name,
+        bytes,
+        count: doc.getPageCount(),
+        tag: fileTag(org.added),
+        colour: FILE_COLOURS[org.added % FILE_COLOURS.length],
+      };
+      org.added++;
+      // Correctly shaped placeholders until pdf.js has drawn each page.
+      file.thumbs = doc.getPages().map((p, i) => {
+        const { width, height } = p.getSize();
+        const rotated = p.getRotation().angle % 180 !== 0;
+        const [w, h] = rotated ? [height, width] : [width, height];
+        const k = GRID_THUMB / Math.max(w, h);
+        return el('canvas', {
+          class: 'pending',
+          role: 'img',
+          'aria-label': `${file.name}, page ${i + 1}`,
+          style: `width:${Math.round(w * k)}px;height:${Math.round(h * k)}px`,
+        });
       });
-    });
-    resetOrg();
-    $('#org-work').hidden = false;
-    // Render thumbnails in the background so the drop zone is free again right away.
-    if (pdfjs) {
-      (async () => {
-        const pdf = await openForView(bytes);
-        for (let i = 0; i < pdf.numPages && token === org.token; i++) {
-          await renderPage(pdf, i + 1, org.thumbs[i], GRID_THUMB_OPTS);
-          org.thumbs[i].classList.remove('pending');
-        }
-        pdf.destroy();
-      })().catch((e) => console.error(e));
+      org.files.push(file);
+      org.pages.push(...filePages(file));
+      org.focus = -1;
+      drawOrg();
+      // Render thumbnails in the background so the drop zone is free again
+      // right away. Stops early if the file is removed meanwhile.
+      if (pdfjs) {
+        (async () => {
+          const pdf = await openForView(bytes);
+          for (let i = 0; i < pdf.numPages && org.files.includes(file); i++) {
+            await renderPage(pdf, i + 1, file.thumbs[i], GRID_THUMB_OPTS);
+            file.thumbs[i].classList.remove('pending');
+          }
+          pdf.destroy();
+        })().catch((e) => console.error(e));
+      }
     }
   });
 
+  const filePages = (file) =>
+    file.thumbs.map((_, i) => ({ file, src: i, rot: 0, sel: false }));
+
   function resetOrg() {
-    org.pages = org.thumbs.map((_, i) => ({ src: i, rot: 0, sel: false }));
+    org.pages = org.files.flatMap(filePages);
+    org.focus = -1;
     drawOrg();
   }
 
+  function removeFile(file) {
+    org.files = org.files.filter((f) => f !== file);
+    org.pages = org.pages.filter((p) => p.file !== file);
+    org.focus = -1;
+    drawOrg();
+  }
+
+  /** The pages that move together with page `i`: every selected page if it is
+   *  one of them, otherwise just itself. */
+  const movingWith = (i) =>
+    org.pages[i].sel ? org.pages.filter((p) => p.sel) : [org.pages[i]];
+
+  /** Takes `moving` out of the document and puts them back, in order, so that
+   *  `at` of the remaining pages come before them. */
+  function placePages(moving, at, focus) {
+    const rest = org.pages.filter((p) => !moving.includes(p));
+    rest.splice(Math.max(0, Math.min(rest.length, at)), 0, ...moving);
+    org.pages = rest;
+    org.focus = org.pages.indexOf(focus);
+    drawOrg();
+  }
+
+  // Dragging: dropping on a later page puts the pages after it, on an earlier
+  // page before it — the same as moving a single page always did.
   function movePage(from, to) {
     if (to < 0 || to >= org.pages.length || from === to) return;
-    org.pages.splice(to, 0, org.pages.splice(from, 1)[0]);
-    org.focus = to;
-    drawOrg();
+    const moving = movingWith(from);
+    const before = org.pages
+      .slice(0, to + (to > from ? 1 : 0))
+      .filter((p) => !moving.includes(p)).length;
+    placePages(moving, before, org.pages[from]);
+  }
+
+  // Keyboard: one step left or right past the neighbouring page.
+  function stepPage(i, dir) {
+    const moving = movingWith(i);
+    const before = org.pages.slice(0, i).filter((p) => !moving.includes(p));
+    placePages(moving, before.length + dir, org.pages[i]);
   }
 
   function drawOrg() {
+    const { files } = org;
+    const many = files.length > 1;
+    $('#org-work').hidden = !files.length;
+
+    // One chip per file, shown once there is more than one to tell apart.
+    const chips = $('#org-files');
+    chips.innerHTML = '';
+    chips.hidden = !many;
+    if (many) {
+      for (const f of files) {
+        const mine = org.pages.filter((p) => p.file === f);
+        const allSel = mine.length > 0 && mine.every((p) => p.sel);
+        chips.append(
+          el(
+            'li',
+            { class: 'orgfile' },
+            el(
+              'span',
+              { class: 'ftag', style: `background:${f.colour}` },
+              f.tag,
+            ),
+            el('span', { class: 'fname', title: f.name }, f.name),
+            el(
+              'span',
+              { class: 'muted small' },
+              mine.length === f.count
+                ? plural(f.count, 'page')
+                : `${mine.length} of ${plural(f.count, 'page')}`,
+            ),
+            el(
+              'button',
+              {
+                type: 'button',
+                'aria-label': `${allSel ? 'Deselect' : 'Select'} the pages of ${
+                  f.name
+                }`,
+                disabled: !mine.length,
+                onclick: () => {
+                  mine.forEach((p) => (p.sel = !allSel));
+                  drawOrg();
+                },
+              },
+              allSel ? 'Deselect' : 'Select pages',
+            ),
+            iconBtn('✕', `Remove ${f.name}`, () => removeFile(f)),
+          ),
+        );
+      }
+    }
+
     const grid = $('#org-grid');
     grid.innerHTML = '';
     org.pages.forEach((p, i) => {
-      const canvas = org.thumbs[p.src];
+      const canvas = p.file.thumbs[p.src];
       canvas.style.transform = `rotate(${p.rot}deg)`;
       const toggle = () => {
         p.sel = !p.sel;
         org.focus = i;
         drawOrg();
       };
+      const from = many ? ` (${p.file.name}, page ${p.src + 1})` : '';
       const frame = el(
         'div',
         {
@@ -1112,8 +1027,10 @@
           role: 'button',
           tabindex: '0',
           'aria-pressed': String(p.sel),
-          'aria-label': `Page ${i + 1}${p.sel ? ', selected' : ''}`,
-          title: 'Click to select',
+          'aria-label': `Page ${i + 1}${from}${p.sel ? ', selected' : ''}`,
+          title: many
+            ? `${p.file.name}, page ${p.src + 1} — click to select`
+            : 'Click to select',
           onclick: toggle,
         },
         canvas,
@@ -1127,9 +1044,24 @@
           (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
         ) {
           e.preventDefault();
-          movePage(i, i + (e.key === 'ArrowLeft' ? -1 : 1));
+          stepPage(i, e.key === 'ArrowLeft' ? -1 : 1);
         }
       });
+      // Where the page came from: its file and page there, or, with a single
+      // file, its old number if it has moved.
+      const origin = many
+        ? el(
+            'span',
+            {
+              class: 'ftag',
+              style: `background:${p.file.colour}`,
+              title: `${p.file.name}, page ${p.src + 1}`,
+            },
+            `${p.file.tag}·${p.src + 1}`,
+          )
+        : p.src !== i
+        ? el('span', { class: 'muted small' }, ` (was ${p.src + 1})`)
+        : '';
       const card = el(
         'div',
         { class: `pcard${p.sel ? ' selected' : ''}` },
@@ -1137,21 +1069,17 @@
         el(
           'div',
           { class: 'pbar' },
-          el(
-            'span',
-            { class: 'num' },
-            i + 1,
-            p.src !== i
-              ? el('span', { class: 'muted small' }, ` (was ${p.src + 1})`)
-              : '',
-          ),
-          iconBtn('⤢', `View page ${i + 1} full size`, () =>
-            openViewer(org.bytes, {
-              pages: org.pages.map((pg) => ({ index: pg.src, rot: pg.rot })),
-              start: i,
-              title: org.name,
-            }),
-          ),
+          el('span', { class: 'num' }, i + 1, many ? ' ' : '', origin),
+          iconBtn('⤢', `View page ${i + 1} full size`, () => {
+            // The viewer shows one file at a time: this page's file, with its
+            // pages in their current order.
+            const mine = org.pages.filter((q) => q.file === p.file);
+            openViewer(p.file.bytes, {
+              pages: mine.map((q) => ({ index: q.src, rot: q.rot })),
+              start: mine.indexOf(p),
+              title: p.file.name,
+            });
+          }),
           iconBtn(
             '↺',
             `Rotate page ${i + 1} left`,
@@ -1172,7 +1100,7 @@
       makeReorderable(card, i, org, movePage);
       grid.append(card);
     });
-    if (!org.pages.length) {
+    if (files.length && !org.pages.length) {
       grid.append(
         el(
           'p',
@@ -1182,12 +1110,14 @@
       );
     }
     const selected = org.pages.filter((p) => p.sel).length;
-    $('#org-info').textContent = `${org.name} · ${plural(
+    const title = many ? plural(files.length, 'file') : files[0]?.name || '';
+    $('#org-info').textContent = `${title} · ${plural(
       org.pages.length,
       'page',
     )}${selected ? ` · ${selected} selected` : ''}`;
-    $('#org-info').title = org.name;
+    $('#org-info').title = many ? '' : title;
     $('#org-save').disabled = !org.pages.length;
+    $('#org-save').textContent = many ? 'Merge & save' : 'Save PDF';
     $('#org-extract-sel').disabled = !selected;
     $('#org-del-sel').disabled = !selected;
     $('#org-rot-sel').title = selected
@@ -1196,14 +1126,22 @@
     if (org.focus >= 0) $$('.pframe', grid)[org.focus]?.focus();
   }
 
+  /** Builds a PDF from `list` (entries of org.pages, possibly repeated). */
   async function exportPages(list, suffix) {
     if (!list.length) throw new Error('No pages to export');
-    const src = await loadPdf(org.bytes);
     const out = await PDFDocument.create();
-    const copied = await out.copyPages(
-      src,
-      list.map((p) => p.src),
-    );
+    const copied = new Array(list.length);
+    const used = [...new Set(list.map((p) => p.file))];
+    for (const file of used) {
+      // One copyPages call per file, so pages that share fonts or images
+      // still share them in the output.
+      const at = list.flatMap((p, k) => (p.file === file ? [k] : []));
+      const pages = await out.copyPages(
+        await loadPdf(file.bytes),
+        at.map((k) => list[k].src),
+      );
+      at.forEach((k, j) => (copied[k] = pages[j]));
+    }
     copied.forEach((page, k) => {
       if (norm360(list[k].rot)) {
         page.setRotation(
@@ -1212,7 +1150,13 @@
       }
       out.addPage(page);
     });
-    await showResult(await out.save(), `${baseName(org.name)}-${suffix}.pdf`);
+    const name =
+      used.length > 1
+        ? suffix === 'organized'
+          ? 'merged'
+          : `merged-${suffix}`
+        : `${baseName(used[0].name)}-${suffix}`;
+    await showResult(await out.save(), `${name}.pdf`);
   }
 
   $('#org-sel-all').addEventListener('click', () => {
@@ -1233,9 +1177,10 @@
     org.focus = -1;
     drawOrg();
   });
-  $('#org-reset').addEventListener('click', () => {
-    org.focus = -1;
-    resetOrg();
+  $('#org-reset').addEventListener('click', resetOrg);
+  $('#org-clear').addEventListener('click', () => {
+    Object.assign(org, { files: [], pages: [], focus: -1, added: 0 });
+    drawOrg();
   });
   $('#org-save').addEventListener('click', (e) =>
     run(e.currentTarget, () => exportPages(org.pages, 'organized')),
