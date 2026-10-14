@@ -345,6 +345,48 @@
     return 1;
   }
 
+  /** A copy of a JPEG without its EXIF block (APP1 "Exif"), or the same bytes
+   *  if it has none. Used when decoding a JPEG that is already inside a PDF:
+   *  PDFs ignore EXIF orientation, but browsers apply it even when asked not
+   *  to (Chrome treats `imageOrientation: 'none'` as 'from-image'). */
+  function jpegWithoutExif(b) {
+    const keep = [b.subarray(0, 2)]; // SOI
+    let i = 2;
+    let removed = false;
+    while (i + 4 <= b.length) {
+      if (b[i] !== 0xff) break;
+      const marker = b[i + 1];
+      if (marker === 0xff) {
+        keep.push(b.subarray(i, i + 1)); // fill byte
+        i++;
+        continue;
+      }
+      if (marker === 0xda || marker === 0xd9) break; // the rest is image data
+      if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+        keep.push(b.subarray(i, i + 2));
+        i += 2;
+        continue;
+      }
+      const end = i + 2 + ((b[i + 2] << 8) | b[i + 3]);
+      if (end > b.length) return b; // malformed: leave it alone
+      const exif =
+        marker === 0xe1 &&
+        String.fromCharCode(...b.subarray(i + 4, i + 8)) === 'Exif';
+      if (exif) removed = true;
+      else keep.push(b.subarray(i, end));
+      i = end;
+    }
+    if (!removed) return b;
+    keep.push(b.subarray(i));
+    const out = new Uint8Array(keep.reduce((n, part) => n + part.length, 0));
+    let at = 0;
+    for (const part of keep) {
+      out.set(part, at);
+      at += part.length;
+    }
+    return out;
+  }
+
   /** Returns PNG or JPG bytes for `file`. HEIC/HEIF and AVIF photos become JPEGs;
    *  other formats (WebP, GIF, …) become PNGs so transparency is kept.
    *  `from` names the original format when the image was converted. */
@@ -3780,10 +3822,12 @@
 
     let source;
     if (filter === N('DCTDecode')) {
+      // PDFs ignore EXIF orientation, so the pixels must be decoded exactly as
+      // stored. Otherwise a phone photo would be turned and then squeezed into
+      // the image's original width and height.
       source = await createImageBitmap(
-        new Blob([img.contents], { type: 'image/jpeg' }),
+        new Blob([jpegWithoutExif(img.contents)], { type: 'image/jpeg' }),
         {
-          imageOrientation: 'none', // PDFs ignore EXIF orientation, so must we
           resizeWidth: nw,
           resizeHeight: nh,
           resizeQuality: 'high',
