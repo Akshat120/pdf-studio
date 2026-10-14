@@ -286,13 +286,98 @@
     return heicDecoder;
   }
 
+  /** The EXIF orientation (1–8) of a JPEG, or 1 if it has none. Phones save
+   *  photos as the sensor saw them and record how to turn them in this tag.
+   *  Never throws: anything unexpected counts as "no tag". */
+  function readJpegOrientation(b) {
+    try {
+      let i = 2; // after SOI
+      while (i + 4 <= b.length) {
+        if (b[i] !== 0xff) return 1;
+        const marker = b[i + 1];
+        if (marker === 0xff) {
+          i++; // fill byte
+          continue;
+        }
+        if (marker === 0xda || marker === 0xd9) return 1; // image data / end: no more metadata
+        if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) {
+          i += 2; // markers without a length
+          continue;
+        }
+        const len = (b[i + 2] << 8) | b[i + 3];
+        const start = i + 4;
+        const end = i + 2 + len;
+        if (len < 2 || end > b.length) return 1;
+        const exif =
+          marker === 0xe1 &&
+          len >= 16 &&
+          String.fromCharCode(...b.subarray(start, start + 4)) === 'Exif' &&
+          b[start + 4] === 0 &&
+          b[start + 5] === 0;
+        if (exif) {
+          const t = start + 6; // TIFF header: byte order, 42, offset of IFD0
+          const order = String.fromCharCode(b[t], b[t + 1]);
+          if (order !== 'II' && order !== 'MM') return 1;
+          const le = order === 'II';
+          const u16 = (o) =>
+            le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+          const u32 = (o) =>
+            (le
+              ? b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)
+              : (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+          if (u16(t + 2) !== 42) return 1;
+          const ifd = t + u32(t + 4);
+          if (ifd + 2 > end) return 1;
+          for (let k = 0, n = u16(ifd); k < n; k++) {
+            const entry = ifd + 2 + k * 12;
+            if (entry + 12 > end) return 1;
+            if (u16(entry) !== 0x0112) continue;
+            const type = u16(entry + 2); // SHORT, or LONG from odd writers
+            const value =
+              type === 3 ? u16(entry + 8) : type === 4 ? u32(entry + 8) : 0;
+            return value >= 1 && value <= 8 ? value : 1;
+          }
+          return 1; // EXIF without an orientation tag
+        }
+        i = end; // some other segment (e.g. XMP in another APP1): skip it
+      }
+    } catch {} // malformed: treat as upright
+    return 1;
+  }
+
   /** Returns PNG or JPG bytes for `file`. HEIC/HEIF and AVIF photos become JPEGs;
    *  other formats (WebP, GIF, …) become PNGs so transparency is kept.
    *  `from` names the original format when the image was converted. */
   async function normalizeImage(file) {
     const bytes = await readFile(file);
     if (isPng(bytes)) return { bytes, type: 'png' };
-    if (isJpg(bytes)) return { bytes, type: 'jpg' };
+    if (isJpg(bytes)) {
+      // Browsers apply the EXIF orientation when they show a photo, but
+      // pdf-lib and PDF viewers ignore it, so a phone photo can land in the PDF
+      // sideways or mirrored. Most photos have no turn to apply and keep their
+      // exact bytes; the others are redrawn upright and saved again.
+      if (readJpegOrientation(bytes) === 1) return { bytes, type: 'jpg' };
+      const bitmap = await createImageBitmap(file, {
+        imageOrientation: 'from-image',
+      }).catch(() => null);
+      if (!bitmap) return { bytes, type: 'jpg' }; // can't decode it; leave it be
+      // Stay within the browser's canvas limit (iOS Safari: ~16.7 MP).
+      const k = Math.min(
+        1,
+        Math.sqrt(MAX_PIXELS / (bitmap.width * bitmap.height)),
+      );
+      const w = Math.max(1, Math.round(bitmap.width * k));
+      const h = Math.max(1, Math.round(bitmap.height * k));
+      const canvas = el('canvas', { width: w, height: h });
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+      bitmap.close();
+      const blob = await new Promise((r) =>
+        canvas.toBlob(r, 'image/jpeg', 0.92),
+      );
+      canvas.width = canvas.height = 0; // free the pixels now
+      if (!blob) return { bytes, type: 'jpg' }; // couldn't encode; keep the original
+      return { bytes: new Uint8Array(await blob.arrayBuffer()), type: 'jpg' };
+    }
     const heif = isHeif(bytes);
     const from = heif
       ? /\.avif$/i.test(file.name)
