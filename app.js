@@ -1110,6 +1110,7 @@
       let bytes, doc;
       try {
         bytes = await readFile(item);
+        if (!isPdf(bytes)) bytes = await imagePagePdf(item);
         doc = await loadPdf(bytes);
       } catch (e) {
         toast(`${item.name}: ${e.message}`, 'error');
@@ -1157,6 +1158,28 @@
 
   const filePages = (file) =>
     file.thumbs.map((_, i) => ({ file, src: i, rot: 0, sel: false }));
+
+  /** PDFs start with "%PDF", though some have a little junk before it. */
+  const isPdf = (b) =>
+    new TextDecoder('latin1').decode(b.subarray(0, 1024)).includes('%PDF');
+
+  /** A one-page PDF holding an image, so images can be merged like PDFs. The
+   *  page is the image's shape, at 96 dpi, shrunk to fit on an A4 page. */
+  async function imagePagePdf(file) {
+    const doc = await PDFDocument.create();
+    const image = await embedImage(doc, await normalizeImage(file));
+    const [a4w, a4h] = PAGE_SIZES.A4;
+    const portrait = image.height >= image.width;
+    const k = Math.min(
+      0.75, // CSS pixels to points
+      (portrait ? a4w : a4h) / image.width,
+      (portrait ? a4h : a4w) / image.height,
+    );
+    const w = image.width * k;
+    const h = image.height * k;
+    doc.addPage([w, h]).drawImage(image, { x: 0, y: 0, width: w, height: h });
+    return doc.save();
+  }
 
   function resetOrg() {
     org.files.forEach((f) => (f.stacked = false));
@@ -1486,6 +1509,8 @@
   /** Builds a PDF from `list` (entries of org.pages, possibly repeated). */
   async function exportPages(list, suffix) {
     if (!list.length) throw new Error('No pages to export');
+    const nup = $('#org-nup').value;
+    if (nup !== '1') return exportSheets(list, suffix, nup);
     const out = await PDFDocument.create();
     const copied = new Array(list.length);
     const used = [...new Set(list.map((p) => p.file))];
@@ -1507,14 +1532,115 @@
       }
       out.addPage(page);
     });
-    const name =
+    await showResult(await out.save(), exportName(used, suffix));
+  }
+
+  const exportName = (used, suffix) =>
+    `${
       used.length > 1
         ? suffix === 'organized'
           ? 'merged'
           : `merged-${suffix}`
-        : `${baseName(used[0].name)}-${suffix}`;
-    await showResult(await out.save(), `${name}.pdf`);
+        : `${baseName(used[0].name)}-${suffix}`
+    }.pdf`;
+
+  // Pages per sheet: [columns, rows] of the grid on each sheet.
+  const NUP_GRID = { '2h': [2, 1], '2v': [1, 2], 4: [2, 2] };
+  const SHEET_MARGIN = 18; // points (¼ inch)
+  const SHEET_GAP = 18;
+
+  /** Like exportPages, but draws `list` several pages to a sheet, left to
+   *  right then top to bottom, each scaled to fit its cell and centred. */
+  async function exportSheets(list, suffix, nup) {
+    const [cols, rows] = NUP_GRID[nup];
+    const out = await PDFDocument.create();
+    const used = [...new Set(list.map((p) => p.file))];
+
+    // Embed each page once (as a Form XObject), clipped to its crop box.
+    const embedded = new Map(); // page entry -> { page, turn, w, h }
+    for (const file of used) {
+      const src = await loadPdf(file.bytes);
+      const mine = [...new Set(list.filter((p) => p.file === file))];
+      const pages = mine.map((p) => src.getPage(p.src));
+      const boxes = pages.map((pg) => {
+        const { x, y, width, height } = pg.getCropBox();
+        return { left: x, bottom: y, right: x + width, top: y + height };
+      });
+      const forms = await out.embedPages(pages, boxes);
+      mine.forEach((p, i) =>
+        embedded.set(p, {
+          page: forms[i],
+          turn: norm360(pages[i].getRotation().angle + p.rot),
+          w: forms[i].width,
+          h: forms[i].height,
+        }),
+      );
+    }
+    const items = list.map((p) => {
+      const e = embedded.get(p);
+      // Size as seen, after the page's own and the user's rotation.
+      const [vw, vh] = e.turn % 180 ? [e.h, e.w] : [e.w, e.h];
+      return { ...e, vw, vh };
+    });
+
+    // Portrait or landscape, whichever shows the pages larger overall.
+    const [pw, ph] = PAGE_SIZES[$('#org-sheet').value] || PAGE_SIZES.A4;
+    const layout = (sw, sh) => {
+      const cw = (sw - 2 * SHEET_MARGIN - (cols - 1) * SHEET_GAP) / cols;
+      const ch = (sh - 2 * SHEET_MARGIN - (rows - 1) * SHEET_GAP) / rows;
+      const area = items.reduce((sum, it) => {
+        const k = Math.min(cw / it.vw, ch / it.vh);
+        return sum + k * k * it.vw * it.vh;
+      }, 0);
+      return { sw, sh, cw, ch, area };
+    };
+    const portrait = layout(pw, ph);
+    const landscape = layout(ph, pw);
+    const { sw, sh, cw, ch } =
+      landscape.area > portrait.area ? landscape : portrait;
+
+    const perSheet = cols * rows;
+    let sheet;
+    items.forEach((it, i) => {
+      const slot = i % perSheet;
+      if (!slot) sheet = out.addPage([sw, sh]);
+      const col = slot % cols;
+      const row = Math.floor(slot / cols);
+      // The cell's bottom-left corner (PDF y runs upwards).
+      const cx = SHEET_MARGIN + col * (cw + SHEET_GAP);
+      const cy = sh - SHEET_MARGIN - (row + 1) * ch - row * SHEET_GAP;
+      const k = Math.min(cw / it.vw, ch / it.vh);
+      const W = it.w * k; // the page's own width and height, scaled
+      const H = it.h * k;
+      // Where the page lands once turned, centred in its cell.
+      const x = cx + (cw - it.vw * k) / 2;
+      const y = cy + (ch - it.vh * k) / 2;
+      // drawPage turns anticlockwise around (x, y); /Rotate is clockwise. Shift
+      // the corner so the turned page still covers the same spot.
+      const [ox, oy] = { 0: [0, 0], 90: [0, W], 180: [W, H], 270: [H, 0] }[
+        it.turn
+      ];
+      sheet.drawPage(it.page, {
+        x: x + ox,
+        y: y + oy,
+        width: W,
+        height: H,
+        rotate: degrees(-it.turn),
+      });
+    });
+    await showResult(
+      await out.save(),
+      exportName(used, suffix),
+      `${perSheet} pages per sheet`,
+    );
   }
+
+  // Sheet options only matter when several pages share a sheet.
+  $('#org-nup').addEventListener('change', (e) => {
+    const many = e.target.value !== '1';
+    $('#org-sheet-wrap').hidden = !many;
+    $('#org-nup-hint').hidden = !many;
+  });
 
   $('#org-sel-all').addEventListener('click', () => {
     org.pages.forEach((p) => (p.sel = true));

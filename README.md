@@ -9,7 +9,7 @@ in your browser — files are never uploaded anywhere, and there's no sign-up.
 
 | Tool                  | What it does                                                                                                                     |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Merge & organize**  | Combine PDFs and arrange their pages in one grid: reorder (drag or Shift + ←/→), rotate, delete, extract by selection or range   |
+| **Merge & organize**  | Combine PDFs and images and arrange their pages in one grid: reorder, rotate, delete, extract, or print 2 or 4 pages per sheet   |
 | **Crop pages**        | Trim margins or keep part of a page: drag a crop box per page, or use the same crop on every page                                |
 | **Compress PDF**      | Shrink PDFs: lossless clean-up, re-save large photos at Recommended / Strong levels, or aim for a target such as 50% smaller     |
 | **Images to PDF**     | Turn JPG / PNG / HEIC / WebP / GIF images into a PDF; drag image cards to order the pages                                        |
@@ -30,6 +30,11 @@ Rotation is available throughout: per page in _Merge & organize_, _Crop
 pages_, _Redact PDF_ and _Add text & images_ (↺ / ↻ next to the page number);
 per image in _Images to PDF_, _Compress images_ and _Resize photo_; and for
 every page at once on any finished PDF, from the result panel.
+
+_Merge & organize_ can also put **2 or 4 pages on each sheet** (side by side,
+one above the other, or 2 × 2), for example an ID card's front and back on one
+side of A4, or two pages per printed side. Images added there become one page
+each.
 
 With several PDFs in _Merge & organize_, **Stack** on a file's chip collapses
 its pages into one card, so the whole file can be moved, rotated or removed in
@@ -243,6 +248,10 @@ These come from pdf-lib:
 - Redacted pages become images, so their remaining text can't be selected or
   searched, and the output drops bookmarks, form fields and document info.
   Scanned pages have no text for _Find text_ — mark them by hand.
+- With 2 or 4 pages per sheet, only each page's printed content is placed on
+  the sheet (it stays sharp vector content). Links, comments and form fields
+  are dropped, including what was typed into form fields, so flatten a form
+  first (_Fill a form_) to keep its values.
 - Cropping hides what is outside the crop area rather than deleting it, so the
   hidden content is still in the file. Use _Redact PDF_ to remove content.
 - No text extraction or conversion to images.
