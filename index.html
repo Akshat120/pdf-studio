@@ -183,12 +183,18 @@
         <section class="tool card" id="tool-merge" aria-labelledby="h-merge">
           <h1 id="h-merge">Merge &amp; organize</h1>
           <p class="sub">
-            Combine PDFs into one file, or tidy up a single PDF: reorder,
-            rotate, delete, or pull out just the pages you need.
+            Combine PDFs and images into one file, or tidy up a single PDF:
+            reorder, rotate, delete, pull out just the pages you need, or print
+            two or four pages on one side of a sheet.
           </p>
           <label class="drop" id="org-drop">
-            <input type="file" accept=".pdf,application/pdf" multiple hidden />
-            <strong>Choose PDFs</strong> or drop them here
+            <input
+              type="file"
+              accept=".pdf,application/pdf,image/*,.heic,.heif"
+              multiple
+              hidden
+            />
+            <strong>Choose PDFs or images</strong> or drop them here
           </label>
           <div id="org-work" hidden>
             <ul
@@ -216,13 +222,38 @@
               </button>
             </div>
             <p class="hint grid-hint">
-              Add more PDFs above to merge them. Click a page to select it. Drag
-              to reorder &mdash; dragging a selected page moves all selected
-              pages &mdash; or focus a page and press Shift + ← / →. With
-              several PDFs, &ldquo;Stack&rdquo; shows a file as one card that
-              moves as a whole.
+              Add more PDFs or images above to merge them. Click a page to
+              select it. Drag to reorder &mdash; dragging a selected page moves
+              all selected pages &mdash; or focus a page and press Shift + ← /
+              →. With several PDFs, &ldquo;Stack&rdquo; shows a file as one card
+              that moves as a whole.
             </p>
             <div class="pagegrid" id="org-grid" aria-label="Pages"></div>
+            <div class="form-grid cols">
+              <label
+                >Pages per sheet
+                <select id="org-nup">
+                  <option value="1" selected>1 (as they are)</option>
+                  <option value="2h">2, side by side</option>
+                  <option value="2v">2, one above the other</option>
+                  <option value="4">4 (2 × 2)</option>
+                </select>
+              </label>
+              <label id="org-sheet-wrap" hidden
+                >Sheet size
+                <select id="org-sheet">
+                  <option value="A4" selected>A4</option>
+                  <option value="Letter">US Letter</option>
+                  <option value="A3">A3</option>
+                </select>
+              </label>
+            </div>
+            <p class="hint" id="org-nup-hint" hidden>
+              Each sheet holds the next pages in the grid's order, scaled to
+              fit. Portrait or landscape is picked to make them as large as
+              possible. Use it for an ID card's front and back on one side, or
+              to print two pages per side.
+            </p>
             <div class="actions">
               <label class="inline"
                 >Pages
