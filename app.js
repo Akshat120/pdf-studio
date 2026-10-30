@@ -4655,15 +4655,13 @@
     for (const file of files) {
       try {
         const bytes = await readFile(file);
+        // Other images are welcome too: picking from the iPhone photo library
+        // often hands the page a JPEG copy of a HEIC photo.
         const kind = sniffImage(bytes);
-        if (kind.label !== 'HEIC') {
-          throw new Error(
-            `${file.name} is not a HEIC photo — use Compress images for other formats`,
-          );
-        }
         const { bitmap, previewUrl } = await decodeImage(file, bytes, kind);
         hc.items.push({
           file,
+          kind,
           name: file.name,
           size: file.size,
           width: bitmap.width,
@@ -4749,7 +4747,7 @@
               ? `${IMAGE_FORMATS[out.type].label} · ${formatBytes(
                   out.blob.size,
                 )}`
-              : `HEIC · ${formatBytes(it.size)}`,
+              : `${it.kind.label} · ${formatBytes(it.size)}`,
           ),
           el(
             'div',
