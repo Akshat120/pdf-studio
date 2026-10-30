@@ -4774,7 +4774,7 @@
     $('#hc-run').disabled = !n;
     $('#hc-clear').hidden = !n;
     $('#hc-zip').hidden = done < 2;
-    $('#hc-quality-row').hidden = $('#hc-format').value !== 'image/jpeg';
+    $('#hc-quality-row').hidden = $('#hc-format').value === 'image/png';
     $('#hc-summary').textContent = !n
       ? 'Add HEIC photos to get started.'
       : done === n
@@ -4789,10 +4789,15 @@
   async function convertHeic(it, type, quality) {
     // Safari opens HEIC itself, so the photo goes through a canvas. Elsewhere
     // heic-to decodes it and writes the new file directly, in one step.
-    const bitmap = await createImageBitmap(it.file).catch(() => null);
+    let bitmap = await createImageBitmap(it.file).catch(() => null);
     if (!bitmap) {
       const heicTo = await loadHeicDecoder();
-      return heicTo({ blob: it.file, type, quality });
+      if (type !== 'image/webp') {
+        return heicTo({ blob: it.file, type, quality });
+      }
+      // heic-to only writes JPEG and PNG: decode losslessly, then re-encode.
+      const png = await heicTo({ blob: it.file, type: 'image/png' });
+      bitmap = await createImageBitmap(png);
     }
     // Stay within the browser's canvas limit (iOS Safari: ~16.7 MP).
     const k = Math.min(
@@ -4867,6 +4872,13 @@
     $('#hc-quality-val').textContent = `${e.target.value}%`;
   });
   $('#hc-quality').addEventListener('change', hcClearResults);
+  // Safari can't write WebP (it hands back a PNG instead), so don't offer it.
+  canEncode('image/webp').then((ok) => {
+    if (ok) return;
+    const option = $('#hc-format option[value="image/webp"]');
+    option.disabled = true;
+    option.textContent += ' — not supported in this browser';
+  });
 
   // ------------------------------------------------------------ resize photo
 
